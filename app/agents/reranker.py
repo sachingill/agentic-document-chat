@@ -61,7 +61,7 @@ Respond with only the numeric score.
 
     # Sort by score (descending)
     scored_docs.sort(key=lambda x: x[1], reverse=True)
-    
+
     logger.info(f"Reranking complete. Top scores: {[f'{s:.2f}' for _, s in scored_docs[:top_k]]}")
 
     # Return top_k chunks (without scores)
