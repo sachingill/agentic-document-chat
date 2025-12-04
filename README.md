@@ -2,6 +2,13 @@
 
 A production-ready RAG (Retrieval Augmented Generation) API built with FastAPI, LangGraph, and ChromaDB. Features query decomposition, multi-query retrieval, LLM reranking, and comprehensive evaluation frameworks.
 
+## 🎯 Two Versions Available
+
+1. **Structured RAG** (This directory) - Fixed pipeline, predictable, fast
+2. **Agentic RAG** (`agentic/` directory) - Dynamic flow, LLM-based decisions, iterative refinement
+
+See `agentic/README.md` for the agentic version with LLM-based tool selection and conditional routing.
+
 ## 🚀 Features
 
 - **Query Decomposition**: Breaks complex queries into 2-4 optimized sub-queries
