@@ -16,8 +16,10 @@ from pathlib import Path
 parent_dir = Path(__file__).parent.parent.parent
 load_dotenv(dotenv_path=parent_dir / ".env")
 
-# Add agentic app to path
-agentic_dir = Path(__file__).parent
+# Add agentic directory to path (two levels up from main.py)
+# main.py is at: agentic/app/main.py
+# Need: agentic/ (so that "from app.xxx" imports work)
+agentic_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(agentic_dir))
 
 # Import LangSmith config early

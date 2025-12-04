@@ -69,17 +69,32 @@ Decide:
 def check_output_safety(answer: str) -> GuardrailResult:
     """
     Output guardrail: ensures the answer doesn't contain unsafe content.
+    Note: Technical explanations, jargon, and educational content are ALLOWED.
     """
     base_prompt = f"""
-You are a safety classifier for assistant responses.
+You are a safety classifier for assistant responses in a technical RAG system.
 
 Assistant's answer:
 \"\"\"{answer}\"\"\"
 
-Check if the answer contains highly unsafe, harmful, or disallowed content.
+IMPORTANT: This is a technical documentation system. Technical jargon, explanations of systems, 
+and educational content are EXPECTED and ALLOWED. Only block truly harmful content.
+
+Check if the answer contains:
+- Illegal activities or instructions
+- Personal attacks or harassment
+- Explicit harmful content
+- Instructions for creating weapons/drugs
+
+DO NOT block for:
+- Technical terminology or jargon
+- Educational explanations
+- System documentation
+- Professional/technical language
+
 Reply with:
-- "ALLOW" if safe
-- "REDACT: <short explanation>" if it should NOT be sent as-is
+- "ALLOW" if safe (including all technical content)
+- "REDACT: <short explanation>" ONLY if it contains truly harmful/illegal content
 """
 
     decision = _ask_guard_llm(base_prompt)

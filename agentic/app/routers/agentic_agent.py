@@ -10,8 +10,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add agentic app to path
-agentic_dir = Path(__file__).parent.parent
+# Add agentic directory to path (three levels up from router file)
+# router file is at: agentic/app/routers/agentic_agent.py
+# Need: agentic/ (so that "from app.xxx" imports work)
+agentic_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(agentic_dir))
 
 from app.agents.agentic_agent import run_agentic_agent
@@ -81,6 +83,13 @@ async def agentic_chat(payload: dict):
 
         # Run AGENTIC agent (not structured RAG)
         raw_answer = await run_agentic_agent(session_id, question)
+        
+        # Ensure we have a non-empty answer
+        if not raw_answer or not raw_answer.strip():
+            raw_answer = "I don't know based on the documents."
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("⚠️ Empty answer from agentic agent, using default")
 
         # Output guardrail
         gr_out = check_output_safety(raw_answer)
@@ -88,6 +97,10 @@ async def agentic_chat(payload: dict):
             safe_answer = gr_out.sanitized_text or raw_answer
         else:
             safe_answer = gr_out.sanitized_text or "I cannot answer that safely."
+        
+        # Final safety check
+        if not safe_answer or not safe_answer.strip():
+            safe_answer = "I don't know based on the documents."
 
         return {
             "answer": safe_answer,

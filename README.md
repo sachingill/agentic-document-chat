@@ -74,6 +74,49 @@ The API will be available at:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
+## 🎨 Web UI (Streamlit)
+
+A simple, elegant, and intuitive web interface for both Structured and Agentic RAG workflows.
+
+![RAG Chat UI](ui_screenshot.png)
+
+### Quick Start
+
+1. **Install UI dependencies:**
+   ```bash
+   pip install streamlit requests
+   ```
+
+2. **Start both backend servers:**
+   ```bash
+   # Terminal 1 - Structured RAG
+   uvicorn app.main:app --reload --port 8000
+   
+   # Terminal 2 - Agentic RAG
+   cd agentic
+   uvicorn app.main:app --reload --port 8001
+   ```
+
+3. **Launch the UI:**
+   ```bash
+   # Terminal 3 - UI
+   streamlit run ui.py
+   # Or use the startup script:
+   ./start_ui.sh
+   ```
+
+The UI will open at `http://localhost:8501`
+
+### Features
+
+- ✨ **Workflow Selection**: Switch between Structured and Agentic RAG
+- 💬 **Chat Interface**: Clean, modern chat UI with conversation history
+- 🔒 **Safety Indicators**: Visual guardrail status (Safe/Blocked/Filtered)
+- 📊 **API Status**: Real-time connection monitoring
+- 🔄 **Session Management**: New session, clear chat, persistent context
+
+See `UI_README.md` for detailed documentation.
+
 ## 📚 Setup Files and Scripts
 
 ### 1. Ingest Golden Dataset
