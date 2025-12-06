@@ -19,8 +19,23 @@ from langchain_openai import ChatOpenAI
 from langsmith import traceable
 import json
 import logging
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file from parent directory (only for local development)
+# In production, environment variables should be set on the hosting platform
+parent_dir = Path(__file__).parent.parent.parent.parent
+env_path = parent_dir / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 logger = logging.getLogger(__name__)
+
+# Configuration
+MAX_ITERATIONS = int(os.getenv("AGENTIC_MAX_ITERATIONS", "3"))
+MAX_CONTEXT_DOCS = int(os.getenv("AGENTIC_MAX_CONTEXT_DOCS", "15"))  # Limit context size
+CONTEXT_DEDUP_THRESHOLD = 100  # Characters to use for deduplication key
 
 # ============================================================================
 # STEP 1: ENHANCED AGENT STATE
@@ -62,14 +77,13 @@ def tool_selection_node(state: AgenticState) -> AgenticState:
     """
     AGENTIC: LLM decides which tool to use based on the question.
     
-    This is different from structured RAG where tools are hardcoded.
-    Here, the LLM analyzes the question and chooses the best tool.
+    IMPROVED: Uses structured JSON output for more reliable parsing.
     """
     question = state["question"]
     current_context = state.get("context", [])
     iteration = state.get("iteration_count", 0)
     
-    # Build prompt for tool selection
+    # Build prompt for tool selection with structured output
     tools_description = """
 Available tools:
 1. retrieve_tool - Search documents using semantic similarity (best for general questions)
@@ -94,29 +108,53 @@ Consider:
 - If you already have context, might need summarization
 - If question asks for specific metadata (category, topic, etc.)
 
-Respond with ONLY the tool name (retrieve_tool, keyword_search_tool, metadata_search_tool, or summarize_tool).
-If multiple tools might be useful, choose the most important one first.
+Respond with a JSON object in this exact format:
+{{
+    "tool": "retrieve_tool" | "keyword_search_tool" | "metadata_search_tool" | "summarize_tool",
+    "reasoning": "brief explanation of why this tool was chosen"
+}}
 """
     
     try:
-        response = agent_llm.invoke(prompt).content.strip()
+        response = decision_llm.invoke(prompt).content.strip()
         
-        # Clean response to get tool name
-        tool_name = response.lower().strip()
-        if "retrieve" in tool_name:
-            tool_name = "retrieve_tool"
-        elif "keyword" in tool_name:
-            tool_name = "keyword_search_tool"
-        elif "metadata" in tool_name:
-            tool_name = "metadata_search_tool"
-        elif "summarize" in tool_name:
-            tool_name = "summarize_tool"
-        else:
-            # Default to retrieve_tool
-            tool_name = "retrieve_tool"
+        # Parse JSON response (more robust than string matching)
+        # Remove markdown code blocks if present
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
         
-        state["tool_selection"] = tool_name
-        logger.info(f"🤖 Agent selected tool: {tool_name} (iteration {iteration + 1})")
+        try:
+            result = json.loads(response)
+            tool_name = result.get("tool", "retrieve_tool")
+            reasoning = result.get("reasoning", "No reasoning provided")
+            
+            # Validate tool name
+            valid_tools = ["retrieve_tool", "keyword_search_tool", "metadata_search_tool", "summarize_tool"]
+            if tool_name not in valid_tools:
+                logger.warning(f"Invalid tool name '{tool_name}', defaulting to retrieve_tool")
+                tool_name = "retrieve_tool"
+            
+            state["tool_selection"] = tool_name
+            logger.info(f"🤖 Agent selected tool: {tool_name} (iteration {iteration + 1}) - {reasoning}")
+            
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response: {e}, falling back to string matching")
+            # Fallback to string matching
+            response_lower = response.lower()
+            if "retrieve" in response_lower:
+                tool_name = "retrieve_tool"
+            elif "keyword" in response_lower:
+                tool_name = "keyword_search_tool"
+            elif "metadata" in response_lower:
+                tool_name = "metadata_search_tool"
+            elif "summarize" in response_lower:
+                tool_name = "summarize_tool"
+            else:
+                tool_name = "retrieve_tool"
+            state["tool_selection"] = tool_name
+            logger.info(f"🤖 Agent selected tool: {tool_name} (iteration {iteration + 1}) [fallback]")
         
     except Exception as e:
         logger.error(f"Error in tool selection: {e}", exc_info=True)
@@ -132,13 +170,111 @@ If multiple tools might be useful, choose the most important one first.
 # This executes different tools based on agent's decision
 # ============================================================================
 
+def _deduplicate_context(context: List[str]) -> List[str]:
+    """Remove duplicate documents from context using content-based deduplication."""
+    seen = set()
+    deduplicated = []
+    for doc in context:
+        # Use first N characters as deduplication key
+        doc_key = doc[:CONTEXT_DEDUP_THRESHOLD].strip().lower()
+        if doc_key and doc_key not in seen:
+            seen.add(doc_key)
+            deduplicated.append(doc)
+    return deduplicated
+
+
+def _limit_context_size(context: List[str], max_docs: int = MAX_CONTEXT_DOCS) -> List[str]:
+    """Limit context to max_docs, keeping the most recent ones."""
+    if len(context) <= max_docs:
+        return context
+    logger.info(f"Limiting context from {len(context)} to {max_docs} documents")
+    return context[-max_docs:]
+
+
+def _extract_keywords_llm(question: str) -> List[str]:
+    """Extract meaningful keywords from question using LLM (improved over naive extraction)."""
+    prompt = f"""
+Extract 2-3 meaningful keywords from this question that would be useful for exact keyword search.
+Focus on:
+- Technical terms
+- Proper nouns (names, places, products)
+- Important concepts
+- Avoid common words like "what", "how", "is", "the"
+
+Question: {question}
+
+Respond with a JSON array of keywords:
+["keyword1", "keyword2", "keyword3"]
+"""
+    try:
+        response = decision_llm.invoke(prompt).content.strip()
+        # Remove markdown code blocks if present
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        
+        keywords = json.loads(response)
+        if isinstance(keywords, list) and len(keywords) > 0:
+            return keywords[:3]  # Limit to 3 keywords
+    except Exception as e:
+        logger.warning(f"Failed to extract keywords with LLM: {e}, using fallback")
+    
+    # Fallback: simple extraction (improved from original)
+    words = question.split()
+    # Filter out common stop words and short words
+    stop_words = {"what", "how", "is", "are", "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
+    keywords = [w.lower().strip(".,!?;:") for w in words if len(w) > 4 and w.lower() not in stop_words]
+    return keywords[:3]
+
+
+def _extract_metadata_llm(question: str) -> Optional[dict]:
+    """Extract metadata (key, value) from question using LLM (fixes hardcoded bug)."""
+    prompt = f"""
+Extract metadata filters from this question if it mentions specific categories, topics, or metadata fields.
+
+Question: {question}
+
+If the question asks for documents with specific metadata (like "topic", "category", "type", etc.),
+respond with JSON:
+{{
+    "key": "metadata_key_name",
+    "value": "metadata_value"
+}}
+
+If no metadata is mentioned, respond with:
+{{
+    "key": null,
+    "value": null
+}}
+"""
+    try:
+        response = decision_llm.invoke(prompt).content.strip()
+        # Remove markdown code blocks if present
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
+        
+        result = json.loads(response)
+        if result.get("key") and result.get("value"):
+            return {"key": result["key"], "value": result["value"]}
+    except Exception as e:
+        logger.warning(f"Failed to extract metadata with LLM: {e}")
+    
+    return None
+
+
 @traceable(name="tool_execution_node", run_type="tool")
 def tool_execution_node(state: AgenticState) -> AgenticState:
     """
     AGENTIC: Execute the tool that the agent selected.
     
-    This is dynamic - different tools execute based on agent's decision.
-    In structured RAG, only retrieve_tool is used. Here, any tool can be used.
+    IMPROVED:
+    - Better keyword extraction using LLM
+    - Dynamic metadata extraction (fixes hardcoded bug)
+    - Context deduplication
+    - Context size limiting
     """
     # Import tools from same directory
     from .tools import (
@@ -155,33 +291,37 @@ def tool_execution_node(state: AgenticState) -> AgenticState:
     logger.info(f"🔧 Executing tool: {tool_name}")
     
     try:
+        new_docs = []
+        
         # Dynamically execute the selected tool
         if tool_name == "retrieve_tool":
             result = retrieve_tool(question, k=5)
-            # Add to context
             new_docs = result.get("results", [])
-            state["context"] = current_context + new_docs
             
         elif tool_name == "keyword_search_tool":
-            # Extract keyword from question (simple approach)
-            keywords = [w for w in question.split() if len(w) > 4][:3]  # Top 3 keywords
+            # IMPROVED: Use LLM to extract meaningful keywords
+            keywords = _extract_keywords_llm(question)
+            logger.info(f"Extracted keywords: {keywords}")
+            
             all_matches = []
             for keyword in keywords:
                 result = keyword_search_tool(keyword)
                 all_matches.extend(result.get("matches", []))
-            state["context"] = current_context + all_matches
+            new_docs = all_matches
             
         elif tool_name == "metadata_search_tool":
-            # Try to extract metadata from question
-            # This is simplified - in production, use NER or structured extraction
-            if "topic" in question.lower() or "category" in question.lower():
-                # Extract topic/category from question
-                result = metadata_search_tool("topic", "circuit_breaker")  # Simplified
-                state["context"] = current_context + result.get("results", [])
+            # IMPROVED: Extract metadata dynamically from question (fixes hardcoded bug)
+            metadata = _extract_metadata_llm(question)
+            
+            if metadata and metadata.get("key") and metadata.get("value"):
+                logger.info(f"Extracted metadata: {metadata['key']}={metadata['value']}")
+                result = metadata_search_tool(metadata["key"], metadata["value"])
+                new_docs = result.get("results", [])
             else:
-                # Default behavior
+                # No metadata found, fallback to retrieve
+                logger.info("No metadata found in question, falling back to retrieve_tool")
                 result = retrieve_tool(question, k=5)
-                state["context"] = current_context + result.get("results", [])
+                new_docs = result.get("results", [])
                 
         elif tool_name == "summarize_tool":
             # Summarize existing context
@@ -190,24 +330,38 @@ def tool_execution_node(state: AgenticState) -> AgenticState:
                 result = summarize_tool(combined_context)
                 summary = result.get("summary", "")
                 state["context"] = [summary]  # Replace with summary
+                state["tool_results"] = {"tool": tool_name, "success": True}
+                logger.info(f"✅ Tool executed: {tool_name}, context summarized to 1 document")
+                return state
             else:
                 # No context to summarize, retrieve instead
                 result = retrieve_tool(question, k=5)
-                state["context"] = result.get("results", [])
+                new_docs = result.get("results", [])
         else:
             # Fallback to retrieve
             result = retrieve_tool(question, k=5)
-            state["context"] = current_context + result.get("results", [])
+            new_docs = result.get("results", [])
+        
+        # IMPROVED: Add new docs to context with deduplication
+        combined_context = current_context + new_docs
+        deduplicated = _deduplicate_context(combined_context)
+        state["context"] = _limit_context_size(deduplicated, MAX_CONTEXT_DOCS)
         
         state["tool_results"] = {"tool": tool_name, "success": True}
-        logger.info(f"✅ Tool executed: {tool_name}, context now has {len(state['context'])} documents")
+        logger.info(f"✅ Tool executed: {tool_name}, context now has {len(state['context'])} documents (after dedup)")
         
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
         state["tool_results"] = {"tool": tool_name, "success": False, "error": str(e)}
         # Fallback to retrieve
-        result = retrieve_tool(question, k=5)
-        state["context"] = current_context + result.get("results", [])
+        try:
+            result = retrieve_tool(question, k=5)
+            new_docs = result.get("results", [])
+            combined_context = current_context + new_docs
+            state["context"] = _limit_context_size(_deduplicate_context(combined_context), MAX_CONTEXT_DOCS)
+        except Exception as fallback_error:
+            logger.error(f"Fallback retrieval also failed: {fallback_error}")
+            state["context"] = current_context  # Keep existing context
     
     return state
 
@@ -224,18 +378,29 @@ def reasoning_node(state: AgenticState) -> AgenticState:
     """
     AGENTIC: LLM reasons about whether to continue, refine, or end.
     
-    This is the key to iterative refinement - the agent decides if it needs more information
-    or if the answer is good enough.
+    IMPROVED:
+    - Uses structured JSON output for more reliable parsing
+    - Configurable max iterations
+    - Early termination if context is sufficient
     """
     question = state["question"]
     context = state.get("context", [])
     iteration = state.get("iteration_count", 0)
     answer = state.get("answer", "")
     
-    # Prevent infinite loops
-    if iteration >= 3:
+    # IMPROVED: Use configurable max iterations
+    if iteration >= MAX_ITERATIONS:
         state["should_continue"] = "end"
-        state["reasoning"] = "Maximum iterations reached"
+        state["reasoning"] = f"Maximum iterations ({MAX_ITERATIONS}) reached"
+        logger.warning(f"Max iterations ({MAX_ITERATIONS}) reached, forcing end")
+        return state
+    
+    # IMPROVED: Early termination if we have sufficient context
+    if len(context) >= MAX_CONTEXT_DOCS and iteration > 0:
+        state["should_continue"] = "end"
+        state["reasoning"] = f"Sufficient context gathered ({len(context)} documents)"
+        state["iteration_count"] = iteration + 1
+        logger.info(f"Early termination: sufficient context ({len(context)} docs)")
         return state
     
     # If we have an answer, evaluate if it's complete
@@ -246,17 +411,18 @@ You are evaluating whether an answer is complete and satisfactory.
 Question: {question}
 Current Answer: {answer}
 Context Available: {len(context)} documents
-Iteration: {iteration + 1}
+Iteration: {iteration + 1} / {MAX_ITERATIONS}
 
 Evaluate:
 1. Is the answer complete and directly addresses the question?
 2. Is there enough context to provide a good answer?
 3. Would retrieving more information improve the answer?
 
-Respond with ONE word:
-- "end" if answer is complete and satisfactory
-- "refine" if answer exists but needs improvement (get more context)
-- "continue" if no answer yet and need more information
+Respond with JSON:
+{{
+    "decision": "end" | "refine" | "continue",
+    "reasoning": "brief explanation"
+}}
 """
     else:
         # No answer yet, check if we have enough context
@@ -265,43 +431,74 @@ You are evaluating whether you have enough information to answer.
 
 Question: {question}
 Context Available: {len(context)} documents
-Iteration: {iteration + 1}
+Iteration: {iteration + 1} / {MAX_ITERATIONS}
 
 Evaluate:
 1. Do we have enough context to answer the question?
 2. Should we retrieve more information?
 
-Respond with ONE word:
-- "continue" if need more information (retrieve more)
-- "end" if have enough context to generate answer
+Respond with JSON:
+{{
+    "decision": "continue" | "end",
+    "reasoning": "brief explanation"
+}}
 """
     
     try:
-        response = decision_llm.invoke(prompt).content.strip().lower()
+        response = decision_llm.invoke(prompt).content.strip()
         
-        if "end" in response:
-            decision = "end"
-            reasoning = "Have enough information to answer"
-        elif "refine" in response:
-            decision = "refine"
-            reasoning = "Answer needs improvement, retrieving more context"
-        else:
-            decision = "continue"
-            reasoning = "Need more information"
+        # IMPROVED: Parse JSON response (more robust)
+        # Remove markdown code blocks if present
+        if "```json" in response:
+            response = response.split("```json")[1].split("```")[0].strip()
+        elif "```" in response:
+            response = response.split("```")[1].split("```")[0].strip()
         
-        state["should_continue"] = decision
-        state["reasoning"] = reasoning
-        state["iteration_count"] = iteration + 1
-        
-        logger.info(f"🧠 Agent reasoning: {reasoning} → {decision}")
+        try:
+            result = json.loads(response)
+            decision = result.get("decision", "end").lower()
+            reasoning = result.get("reasoning", "No reasoning provided")
+            
+            # Validate decision
+            valid_decisions = ["continue", "refine", "end"]
+            if decision not in valid_decisions:
+                logger.warning(f"Invalid decision '{decision}', defaulting to 'end'")
+                decision = "end"
+            
+            state["should_continue"] = decision
+            state["reasoning"] = reasoning
+            state["iteration_count"] = iteration + 1
+            
+            logger.info(f"🧠 Agent reasoning: {reasoning} → {decision}")
+            
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response: {e}, falling back to string matching")
+            # Fallback to string matching
+            response_lower = response.lower()
+            if "end" in response_lower and ("refine" not in response_lower and "continue" not in response_lower):
+                decision = "end"
+                reasoning = "Have enough information to answer"
+            elif "refine" in response_lower:
+                decision = "refine"
+                reasoning = "Answer needs improvement, retrieving more context"
+            else:
+                decision = "continue"
+                reasoning = "Need more information"
+            
+            state["should_continue"] = decision
+            state["reasoning"] = reasoning
+            state["iteration_count"] = iteration + 1
+            logger.info(f"🧠 Agent reasoning: {reasoning} → {decision} [fallback]")
         
     except Exception as e:
         logger.error(f"Error in reasoning: {e}", exc_info=True)
         # Default: end if we have context, continue if not
         if context:
             state["should_continue"] = "end"
+            state["reasoning"] = "Error in reasoning, defaulting to end (have context)"
         else:
             state["should_continue"] = "continue"
+            state["reasoning"] = "Error in reasoning, defaulting to continue (no context)"
         state["iteration_count"] = iteration + 1
     
     return state
@@ -313,17 +510,63 @@ Respond with ONE word:
 # Why: Generate final answer from accumulated context
 # ============================================================================
 
+@traceable(name="rerank_context_node", run_type="chain")
+async def rerank_context_node(state: AgenticState) -> AgenticState:
+    """
+    IMPROVED: Rerank context before generation (like structured RAG).
+    This improves answer quality by ensuring most relevant documents are used.
+    """
+    question = state["question"]
+    context = state.get("context", [])
+    
+    if not context:
+        logger.warning("No context to rerank")
+        return state
+    
+    # Import reranker from parent app
+    import sys
+    from pathlib import Path
+    parent_dir = Path(__file__).parent.parent.parent.parent
+    sys.path.insert(0, str(parent_dir))
+    from app.agents.reranker import rerank
+    
+    try:
+        # Rerank and keep top 5 most relevant documents
+        ranked = await rerank(question, context, top_k=5)
+        state["context"] = ranked
+        logger.info(f"✅ Context reranked: {len(context)} → {len(ranked)} documents")
+    except Exception as e:
+        logger.error(f"Error reranking context: {e}", exc_info=True)
+        # Keep original context if reranking fails
+        state["context"] = context[:5]  # At least limit to 5
+    
+    return state
+
+
 @traceable(name="generate_answer_node", run_type="llm")
-def generate_answer_node(state: AgenticState) -> AgenticState:
+async def generate_answer_node(state: AgenticState) -> AgenticState:
     """
     Generate answer from accumulated context.
-    Similar to structured RAG, but context comes from dynamic tool selection.
+    
+    IMPROVED:
+    - Reranks context before generation (like structured RAG)
+    - Limits context size to prevent token overflow
     """
+    # IMPROVED: Rerank context before generation
+    state = await rerank_context_node(state)
+    
     # Import memory from models
     from app.models.memory import Memory
     
     question = state["question"]
-    context = "\n\n".join(state.get("context", []))
+    context_list = state.get("context", [])
+    
+    # IMPROVED: Limit context to prevent token overflow
+    if len(context_list) > 5:
+        logger.info(f"Limiting context from {len(context_list)} to 5 documents for generation")
+        context_list = context_list[:5]
+    
+    context = "\n\n".join(context_list)
     session = state["session_id"]
     
     history = Memory.get_context(session)
@@ -368,21 +611,14 @@ def should_continue(state: AgenticState) -> Literal["tool_selection", "generate"
     """
     AGENTIC: Conditional routing based on agent's decision.
     
-    This is the KEY difference from structured RAG:
-    - Structured: Always same path
-    - Agentic: Path changes based on LLM's reasoning
-    
-    Flow:
-    - "continue" → Go back to tool_selection (get more info)
-    - "refine" → Go back to tool_selection (improve answer)
-    - "end" → Generate answer and finish
+    IMPROVED: Uses configurable max iterations
     """
     decision = state.get("should_continue", "end")
     iteration = state.get("iteration_count", 0)
     
-    # Safety: prevent infinite loops
-    if iteration >= 3:
-        logger.warning("Max iterations reached, forcing end")
+    # IMPROVED: Use configurable max iterations
+    if iteration >= MAX_ITERATIONS:
+        logger.warning(f"Max iterations ({MAX_ITERATIONS}) reached, forcing end")
         return "end"
     
     if decision == "continue":
@@ -451,29 +687,54 @@ AGENTIC_AGENT = build_agentic_graph()
 
 
 @traceable(name="run_agentic_agent", run_type="chain")
-async def run_agentic_agent(session_id: str, question: str):
+async def run_agentic_agent(session_id: str, question: str, max_iterations: Optional[int] = None):
     """
     Run the agentic agent.
+    
+    IMPROVED:
+    - Configurable max_iterations parameter
+    - Better logging of iterations and tool usage
     
     This is different from structured RAG:
     - Structured: Fixed path, always same steps
     - Agentic: Dynamic path, LLM decides steps, can loop back
     """
-    initial = {
-        "session_id": session_id,
-        "question": question,
-        "context": [],
-        "answer": "",
-        "tool_selection": None,
-        "tool_results": None,
-        "reasoning": None,
-        "iteration_count": 0,
-        "should_continue": None
-    }
+    # Use provided max_iterations or default from config
+    global MAX_ITERATIONS
+    original_max = MAX_ITERATIONS
+    if max_iterations is not None:
+        MAX_ITERATIONS = max_iterations
+        logger.info(f"Using custom max_iterations: {max_iterations}")
     
-    result = await AGENTIC_AGENT.ainvoke(
-        initial, 
-        config={"metadata": {"session_id": session_id, "agentic": True}}
-    )
-    
-    return result["answer"]
+    try:
+        initial = {
+            "session_id": session_id,
+            "question": question,
+            "context": [],
+            "answer": "",
+            "tool_selection": None,
+            "tool_results": None,
+            "reasoning": None,
+            "iteration_count": 0,
+            "should_continue": None
+        }
+        
+        result = await AGENTIC_AGENT.ainvoke(
+            initial, 
+            config={"metadata": {
+                "session_id": session_id, 
+                "agentic": True,
+                "max_iterations": MAX_ITERATIONS
+            }}
+        )
+        
+        # Log final statistics
+        final_iterations = result.get("iteration_count", 0)
+        final_context_size = len(result.get("context", []))
+        tools_used = result.get("tool_selection", "unknown")
+        logger.info(f"✅ Agentic agent completed: {final_iterations} iterations, {final_context_size} context docs, tool: {tools_used}")
+        
+        return result["answer"]
+    finally:
+        # Restore original max_iterations
+        MAX_ITERATIONS = original_max

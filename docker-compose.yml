@@ -1,0 +1,46 @@
+# Docker Compose for local testing or deployment
+# Run all services together
+
+version: '3.8'
+
+services:
+  structured-api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_TRACING=false
+    volumes:
+      - ./ragdb:/app/ragdb  # Persist vector DB
+    restart: unless-stopped
+
+  agentic-api:
+    build: .
+    working_dir: /app/agentic
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_TRACING=false
+      - AGENTIC_MAX_ITERATIONS=3
+      - AGENTIC_MAX_CONTEXT_DOCS=15
+    volumes:
+      - ./ragdb:/app/ragdb  # Share vector DB
+    restart: unless-stopped
+
+  streamlit-ui:
+    build: .
+    command: streamlit run ui.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - STRUCTURED_API_URL=http://structured-api:8000
+      - AGENTIC_API_URL=http://agentic-api:8001
+    depends_on:
+      - structured-api
+      - agentic-api
+    restart: unless-stopped
+

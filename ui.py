@@ -7,6 +7,7 @@ A simple, elegant, and intuitive UI for both Structured and Agentic RAG workflow
 import streamlit as st
 import requests
 import json
+import os
 from typing import Dict, List, Optional
 from datetime import datetime
 import uuid
@@ -14,9 +15,10 @@ import uuid
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
+# Use environment variables for production, fallback to localhost for development
 
-STRUCTURED_API_URL = "http://localhost:8000"
-AGENTIC_API_URL = "http://localhost:8001"
+STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "http://localhost:8000")
+AGENTIC_API_URL = os.getenv("AGENTIC_API_URL", "http://localhost:8001")
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -130,15 +132,20 @@ if "api_status" not in st.session_state:
 
 def check_api_status(api_url: str, workflow_name: str) -> bool:
     """Check if API is running"""
+    status_key = workflow_name.lower().replace(" ", "_")
     try:
         response = requests.get(f"{api_url}/", timeout=2)
         if response.status_code == 200:
-            st.session_state.api_status[workflow_name.lower().replace(" ", "_")] = True
+            st.session_state.api_status[status_key] = True
             return True
+        else:
+            # Non-200 status code - API is not healthy
+            st.session_state.api_status[status_key] = False
+            return False
     except:
-        st.session_state.api_status[workflow_name.lower().replace(" ", "_")] = False
+        # Exception occurred - API is not reachable
+        st.session_state.api_status[status_key] = False
         return False
-    return False
 
 def send_chat_message(question: str, workflow: str) -> Dict:
     """Send chat message to appropriate API"""
@@ -247,18 +254,8 @@ with st.sidebar:
     st.markdown("""
     ### 📖 About
     This UI allows you to interact with both RAG workflows:
-    - **Structured**: Port 8000
-    - **Agentic**: Port 8001
-    
-    Start the servers before using:
-    ```bash
-    # Structured RAG
-    uvicorn app.main:app --port 8000
-    
-    # Agentic RAG
-    cd agentic
-    uvicorn app.main:app --port 8001
-    ```
+    - **Structured RAG**: Fixed pipeline, fast, predictable
+    - **Agentic RAG**: Dynamic tool selection, iterative refinement
     """)
 
 # ============================================================================

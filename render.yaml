@@ -1,0 +1,45 @@
+# Render.com Configuration
+# This file configures both FastAPI services for deployment on Render
+
+services:
+  # Structured RAG API
+  - type: web
+    name: rag-structured-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # REQUIRED: Set OPENAI_API_KEY in Render dashboard → Environment tab
+      # DO NOT put the actual key value here - it will be visible in git
+      - key: OPENAI_API_KEY
+        sync: false  # Set your OpenAI API key in Render dashboard
+      # Optional: LangSmith for tracing
+      - key: LANGSMITH_API_KEY
+        sync: false  # Set if using LangSmith tracing
+      - key: LANGSMITH_TRACING
+        value: "false"  # Set to "true" to enable tracing
+    healthCheckPath: /
+    plan: free
+
+  # Agentic RAG API
+  - type: web
+    name: rag-agentic-api
+    env: python
+    buildCommand: cd agentic && pip install -r ../requirements.txt
+    startCommand: cd agentic && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # IMPORTANT: Set these in Render dashboard → Environment tab
+      # DO NOT put actual values here - they will be visible in git
+      - key: OPENAI_API_KEY
+        sync: false  # REQUIRED: Set your OpenAI API key in Render dashboard
+      - key: LANGSMITH_API_KEY
+        sync: false  # Optional: Set if using LangSmith tracing
+      - key: LANGSMITH_TRACING
+        value: "false"  # Set to "true" to enable tracing
+      - key: AGENTIC_MAX_ITERATIONS
+        value: "3"  # Optional: Max iterations for agentic loop
+      - key: AGENTIC_MAX_CONTEXT_DOCS
+        value: "15"  # Optional: Max context documents
+    healthCheckPath: /
+    plan: free
+
