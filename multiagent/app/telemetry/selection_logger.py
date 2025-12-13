@@ -31,7 +31,8 @@ def log_selection_event(event: Dict[str, Any]) -> None:
         out_path = Path(path).expanduser()
     else:
         # project root: .../api/
-        project_root = Path(__file__).resolve().parents[4]
+        # selection_logger.py -> telemetry -> app -> multiagent -> api (project root)
+        project_root = Path(__file__).resolve().parents[3]
         out_path = project_root / "multiagent_selection_events.jsonl"
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

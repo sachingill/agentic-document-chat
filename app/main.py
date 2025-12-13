@@ -23,6 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user, predict
 from app.routers.agent import router as agent_router
 import logging
+import sys
+from pathlib import Path
+
+# Add project root to path for multiagent imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Configure logging to see debug messages
 logging.basicConfig(
@@ -62,6 +68,14 @@ app.include_router(user.router)
 app.include_router(predict.router)
 
 app.include_router(agent_router)
+
+# Multi-agent router
+try:
+    from multiagent.app.routers.multiagent import router as multiagent_router
+    app.include_router(multiagent_router, prefix="/multiagent", tags=["multiagent"])
+    logger.info("Multi-agent router registered successfully")
+except Exception as e:
+    logger.warning(f"Failed to register multi-agent router: {e}")
 
 @app.get("/")
 async def root():

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 import logging
 import sys
+import inspect
 from pathlib import Path
 
 # Add project root to path
@@ -213,6 +214,9 @@ async def supervisor_chat(request: ChatRequest):
             question=request.question,
             session_id=request.session_id
         )
+        # If the implementation is ever switched to async, handle it safely.
+        if inspect.isawaitable(result):
+            result = await result
         
         # Output guardrail
         answer = result.get("answer", "")
