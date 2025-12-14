@@ -20,6 +20,9 @@ import uuid
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "http://localhost:8000")
 AGENTIC_API_URL = os.getenv("AGENTIC_API_URL", "http://localhost:8001")
 
+WORKFLOW_STRUCTURED = "Structured RAG"
+WORKFLOW_AGENTIC = "Agentic RAG"
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
@@ -115,7 +118,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "workflow" not in st.session_state:
-    st.session_state.workflow = "Structured RAG"  # Default
+    st.session_state.workflow = WORKFLOW_STRUCTURED  # Default
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -123,16 +126,16 @@ if "session_id" not in st.session_state:
 if "api_status" not in st.session_state:
     st.session_state.api_status = {
         "structured": None,
-        "agentic": None
+        "agentic": None,
+        "multiagent": None,
     }
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
-def check_api_status(api_url: str, workflow_name: str) -> bool:
+def check_api_status(api_url: str, status_key: str) -> bool:
     """Check if API is running"""
-    status_key = workflow_name.lower().replace(" ", "_")
     try:
         response = requests.get(f"{api_url}/", timeout=2)
         if response.status_code == 200:
@@ -142,20 +145,51 @@ def check_api_status(api_url: str, workflow_name: str) -> bool:
             # Non-200 status code - API is not healthy
             st.session_state.api_status[status_key] = False
             return False
-    except:
+    except Exception:
         # Exception occurred - API is not reachable
         st.session_state.api_status[status_key] = False
         return False
 
-def send_chat_message(question: str, workflow: str) -> Dict:
+def _is_multiagent_workflow(workflow: str) -> bool:
+    return workflow.startswith("Multi-agent")
+
+
+def send_chat_message(
+    question: str,
+    workflow: str,
+    *,
+    multiagent_pattern: Optional[str] = None,
+    auto_select_pattern: bool = True,
+    max_relative_cost: Optional[float] = None,
+    max_relative_latency: Optional[float] = None,
+) -> Dict:
     """Send chat message to appropriate API"""
-    api_url = STRUCTURED_API_URL if workflow == "Structured RAG" else AGENTIC_API_URL
-    endpoint = "/agent/chat" if workflow == "Structured RAG" else "/agentic/chat"
-    
+    # Default to Structured RAG
+    api_url = STRUCTURED_API_URL
+    endpoint = "/agent/chat"
     payload = {
         "question": question,
-        "session_id": st.session_state.session_id
+        "session_id": st.session_state.session_id,
     }
+
+    if workflow == WORKFLOW_AGENTIC:
+        api_url = AGENTIC_API_URL
+        endpoint = "/agentic/chat"
+    elif _is_multiagent_workflow(workflow):
+        # Multi-agent runs on the main API server (same as Structured)
+        api_url = STRUCTURED_API_URL
+        endpoint = "/multiagent/chat"
+        payload = {
+            "question": question,
+            "session_id": st.session_state.session_id,
+            "auto_select_pattern": auto_select_pattern,
+        }
+        if not auto_select_pattern and multiagent_pattern:
+            payload["pattern"] = multiagent_pattern
+        if max_relative_cost is not None:
+            payload["max_relative_cost"] = max_relative_cost
+        if max_relative_latency is not None:
+            payload["max_relative_latency"] = max_relative_latency
     
     try:
         response = requests.post(
@@ -192,7 +226,14 @@ with st.sidebar:
     
     # Workflow Selection
     st.subheader("📋 Workflow")
-    workflow_options = ["Structured RAG", "Agentic RAG"]
+    workflow_options = [
+        WORKFLOW_STRUCTURED,
+        WORKFLOW_AGENTIC,
+        "Multi-agent (Auto)",
+        "Multi-agent (Sequential)",
+        "Multi-agent (Parallel)",
+        "Multi-agent (Supervisor)",
+    ]
     selected_workflow = st.radio(
         "Choose workflow:",
         workflow_options,
@@ -203,20 +244,59 @@ with st.sidebar:
     
     # Workflow Description
     st.markdown("---")
-    if selected_workflow == "Structured RAG":
+    if selected_workflow == WORKFLOW_STRUCTURED:
         st.info("""
         **Structured RAG**
         - Fixed pipeline flow
         - Fast & predictable
         - Best for simple questions
         """)
-    else:
+    elif selected_workflow == WORKFLOW_AGENTIC:
         st.info("""
         **Agentic RAG**
         - Dynamic tool selection
         - Iterative refinement
         - Best for complex questions
         """)
+    else:
+        st.info("""
+        **Multi-agent RAG**
+        - Multiple patterns (sequential / parallel / supervisor-worker)
+        - Auto-select can choose a pattern per question
+        - Parallel includes evaluation to pick the best answer
+        """)
+        
+        # Multi-agent controls
+        st.markdown("**Multi-agent Settings**")
+        if selected_workflow == "Multi-agent (Auto)":
+            st.session_state["multiagent_auto_select"] = True
+            st.session_state["multiagent_pattern"] = None
+        elif selected_workflow == "Multi-agent (Sequential)":
+            st.session_state["multiagent_auto_select"] = False
+            st.session_state["multiagent_pattern"] = "sequential"
+        elif selected_workflow == "Multi-agent (Parallel)":
+            st.session_state["multiagent_auto_select"] = False
+            st.session_state["multiagent_pattern"] = "parallel"
+        else:
+            st.session_state["multiagent_auto_select"] = False
+            st.session_state["multiagent_pattern"] = "supervisor"
+        
+        with st.expander("Budgets (optional)", expanded=False):
+            st.caption("Soft constraints using relative estimates. Lower budgets may downgrade to cheaper/faster patterns.")
+            st.session_state["max_relative_cost"] = st.number_input(
+                "Max relative cost",
+                min_value=0.5,
+                max_value=10.0,
+                value=st.session_state.get("max_relative_cost", 2.0),
+                step=0.1,
+            )
+            st.session_state["max_relative_latency"] = st.number_input(
+                "Max relative latency",
+                min_value=0.5,
+                max_value=10.0,
+                value=st.session_state.get("max_relative_latency", 2.0),
+                step=0.1,
+            )
     
     # API Status
     st.markdown("---")
@@ -224,6 +304,8 @@ with st.sidebar:
     
     structured_status = check_api_status(STRUCTURED_API_URL, "structured")
     agentic_status = check_api_status(AGENTIC_API_URL, "agentic")
+    # Multi-agent runs on the structured server
+    st.session_state.api_status["multiagent"] = structured_status
     
     if structured_status:
         st.success("✅ Structured RAG API: Online")
@@ -234,6 +316,11 @@ with st.sidebar:
         st.success("✅ Agentic RAG API: Online")
     else:
         st.error("❌ Agentic RAG API: Offline")
+    
+    if structured_status:
+        st.success("✅ Multi-agent API: Online (via Structured server)")
+    else:
+        st.error("❌ Multi-agent API: Offline (Structured server down)")
     
     # Session Management
     st.markdown("---")
@@ -280,6 +367,20 @@ with chat_container:
         else:
             guardrail_html = format_guardrail_status(message.get("guardrail"))
             workflow_badge = f'<span class="status-badge status-success">{message.get("workflow", "Unknown")}</span>'
+            metadata = message.get("metadata") or {}
+            meta_lines = []
+            if isinstance(metadata, dict):
+                if metadata.get("pattern_selected"):
+                    meta_lines.append(f"Pattern: {metadata.get('pattern_selected')}")
+                if metadata.get("selected_agent"):
+                    meta_lines.append(f"Selected agent: {metadata.get('selected_agent')}")
+                if metadata.get("evaluation_scores"):
+                    meta_lines.append("Scores: " + json.dumps(metadata.get("evaluation_scores"), ensure_ascii=False))
+                if metadata.get("pattern_selection_mode"):
+                    meta_lines.append(f"Select mode: {metadata.get('pattern_selection_mode')}")
+            meta_html = ""
+            if meta_lines:
+                meta_html = "<br><span style='color:#666; font-size:0.85rem;'>" + " | ".join(meta_lines) + "</span>"
             
             # Escape HTML in message content to prevent issues
             import html
@@ -289,7 +390,7 @@ with chat_container:
             
             st.markdown(f"""
             <div class="assistant-message">
-                <strong>Assistant:</strong> {workflow_badge} {guardrail_html}<br><br>
+                <strong>Assistant:</strong> {workflow_badge} {guardrail_html}{meta_html}<br><br>
                 <div style="margin-top: 0.5rem;">{safe_content}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -309,18 +410,29 @@ if user_input:
     # Show loading indicator
     with st.spinner(f"Processing with {st.session_state.workflow}..."):
         # Send to API
-        response = send_chat_message(user_input, st.session_state.workflow)
+        if _is_multiagent_workflow(st.session_state.workflow):
+            response = send_chat_message(
+                user_input,
+                st.session_state.workflow,
+                multiagent_pattern=st.session_state.get("multiagent_pattern"),
+                auto_select_pattern=bool(st.session_state.get("multiagent_auto_select", True)),
+                max_relative_cost=st.session_state.get("max_relative_cost"),
+                max_relative_latency=st.session_state.get("max_relative_latency"),
+            )
+        else:
+            response = send_chat_message(user_input, st.session_state.workflow)
         
         # Extract answer and guardrail info
         answer = response.get("answer", "No answer received.")
         guardrail = response.get("guardrail")
-        is_agentic = response.get("agentic", False)
+        metadata = response.get("metadata")
         
         # Add assistant message to chat
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer,
             "guardrail": guardrail,
+            "metadata": metadata,
             "workflow": st.session_state.workflow,
             "timestamp": datetime.now().isoformat()
         })
