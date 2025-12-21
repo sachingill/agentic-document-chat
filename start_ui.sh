@@ -28,20 +28,12 @@ fi
 # Check if servers are running
 echo "🔍 Checking API servers..."
 
-# Check Structured RAG (port 8000)
+# Check Backend API (port 8000)
 if curl -s http://localhost:8000/ > /dev/null 2>&1; then
-    echo "✅ Structured RAG API is running on port 8000"
+    echo "✅ Backend API is running on port 8000"
 else
-    echo "⚠️  Structured RAG API is not running on port 8000"
+    echo "⚠️  Backend API is not running on port 8000"
     echo "   Start it with: uvicorn app.main:app --reload --port 8000"
-fi
-
-# Check Agentic RAG (port 8001)
-if curl -s http://localhost:8001/ > /dev/null 2>&1; then
-    echo "✅ Agentic RAG API is running on port 8001"
-else
-    echo "⚠️  Agentic RAG API is not running on port 8001"
-    echo "   Start it with: cd agentic && uvicorn app.main:app --reload --port 8001"
 fi
 
 echo ""

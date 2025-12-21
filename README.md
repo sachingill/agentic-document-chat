@@ -74,6 +74,76 @@ The API will be available at:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
+## 🧰 MCP (Model Context Protocol) Tooling (Cursor / Claude Desktop)
+
+This repo includes an **MCP server** that exposes this FastAPI backend as tools for MCP-capable clients (e.g., Cursor, Claude Desktop).
+
+### Prereqs
+
+1. Start the backend (single API):
+
+```bash
+cd /Users/sachin/nltk_data/api
+./start_local_dev.sh
+```
+
+2. Run MCP server (stdio):
+
+```bash
+cd /Users/sachin/nltk_data/api
+source venv/bin/activate
+python scripts/mcp_server.py
+```
+
+The MCP server forwards calls to the backend using:
+- `MCP_API_BASE_URL` (default: `http://127.0.0.1:8000`)
+
+### Cursor (JSON config)
+
+Create this file:
+- `/Users/sachin/nltk_data/api/.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "agentic-document-chat": {
+      "command": "python",
+      "args": ["/Users/sachin/nltk_data/api/scripts/mcp_server.py"],
+      "env": {
+        "MCP_API_BASE_URL": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop (JSON config)
+
+macOS:
+- `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "agentic-document-chat": {
+      "command": "python",
+      "args": ["/Users/sachin/nltk_data/api/scripts/mcp_server.py"],
+      "env": {
+        "MCP_API_BASE_URL": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}
+```
+
+### What tools are exposed
+
+The MCP server exposes these tools (and proxies them to the FastAPI endpoints):
+- `chat` → `POST /agent/chat`, `POST /agentic/chat`, `POST /multiagent/chat` (via `workflow`)
+- `ingest_texts` → `POST /agent/ingest/json`
+- `status` → `GET /agent/debug/status`
+- `feedback` → `POST /agent/feedback`
+
 ## 🎨 Web UI (Streamlit)
 
 A simple, elegant, and intuitive web interface for both Structured and Agentic RAG workflows.
@@ -87,14 +157,9 @@ A simple, elegant, and intuitive web interface for both Structured and Agentic R
    pip install streamlit requests
    ```
 
-2. **Start both backend servers:**
+2. **Start backend server:**
    ```bash
-   # Terminal 1 - Structured RAG
    uvicorn app.main:app --reload --port 8000
-   
-   # Terminal 2 - Agentic RAG
-   cd agentic
-   uvicorn app.main:app --reload --port 8001
    ```
 
 3. **Launch the UI:**

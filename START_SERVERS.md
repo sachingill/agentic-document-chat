@@ -2,9 +2,9 @@
 
 ## Quick Start Guide
 
-You need **3 terminals** to run everything:
+You need **2 terminals** to run everything:
 
-### Terminal 1: Structured RAG API (Port 8000)
+### Terminal 1: Backend API (Port 8000)
 
 ```bash
 cd /Users/sachin/nltk_data/api
@@ -18,21 +18,7 @@ curl http://localhost:8000/
 # Should return: {"message":"API is running"}
 ```
 
-### Terminal 2: Agentic RAG API (Port 8001)
-
-```bash
-cd /Users/sachin/nltk_data/api/agentic
-source ../venv/bin/activate
-uvicorn app.main:app --reload --port 8001
-```
-
-**Verify it's running:**
-```bash
-curl http://localhost:8001/
-# Should return: {"message":"Agentic RAG API is running","version":"agentic",...}
-```
-
-### Terminal 3: Streamlit UI (Port 8501)
+### Terminal 2: Streamlit UI (Port 8501)
 
 ```bash
 cd /Users/sachin/nltk_data/api
@@ -52,13 +38,6 @@ The UI will automatically open at `http://localhost:8501`
 ```bash
 lsof -i :8001
 # If nothing shows, the server isn't running
-```
-
-**Start the agentic server:**
-```bash
-cd /Users/sachin/nltk_data/api/agentic
-source ../venv/bin/activate
-uvicorn app.main:app --reload --port 8001
 ```
 
 **Check for errors:**

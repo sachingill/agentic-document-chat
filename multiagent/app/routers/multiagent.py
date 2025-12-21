@@ -22,6 +22,7 @@ from multiagent.app.agents.supervisor_workflow import run_supervisor_agent
 from multiagent.app.agents.pattern_selector import select_pattern
 from multiagent.app.telemetry.selection_logger import log_selection_event
 from app.agents.guardrails import check_input_safety, check_output_safety
+from app.agents.help_guide import is_help_query, help_answer
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,15 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
     reset_session: bool = False
     # Optional override for /multiagent/chat
-    pattern: Optional[Literal["sequential", "parallel", "supervisor"]] = None
+    # "auto" is accepted for UI convenience and treated as "no override".
+    pattern: Optional[Literal["auto", "sequential", "parallel", "supervisor"]] = None
     auto_select_pattern: bool = True
     # Optional budgets for /multiagent/chat (soft constraints via relative estimates)
     # If provided, selector may downgrade pattern to fit these limits.
     max_relative_cost: Optional[float] = None
     max_relative_latency: Optional[float] = None
+    # Inference strictness (affects retrieval effort + verification)
+    inference_mode: Literal["low", "balanced", "high"] = "balanced"
 
 
 class ChatResponse(BaseModel):
@@ -76,11 +80,22 @@ async def sequential_chat(request: ChatRequest):
                     "reason": gr_in.reason
                 }
             )
+
+        # Help / onboarding intent (non-RAG)
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="sequential",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+            )
         
         # Run sequential agent (async)
         result = await run_sequential_agent(
             question=request.question,
-            session_id=request.session_id
+            session_id=request.session_id,
+            inference_mode=request.inference_mode,
         )
         
         # Output guardrail
@@ -138,11 +153,22 @@ async def parallel_chat(request: ChatRequest):
                     "reason": gr_in.reason
                 }
             )
+
+        # Help / onboarding intent (non-RAG)
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="parallel",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+            )
         
         # Run parallel agent
         result = await run_parallel_agent(
             question=request.question,
-            session_id=request.session_id
+            session_id=request.session_id,
+            inference_mode=request.inference_mode,
         )
         
         # Output guardrail
@@ -208,11 +234,22 @@ async def supervisor_chat(request: ChatRequest):
                     "reason": gr_in.reason
                 }
             )
+
+        # Help / onboarding intent (non-RAG)
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="supervisor",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+            )
         
         # Run supervisor agent
         result = run_supervisor_agent(
             question=request.question,
-            session_id=request.session_id
+            session_id=request.session_id,
+            inference_mode=request.inference_mode,
         )
         # If the implementation is ever switched to async, handle it safely.
         if inspect.isawaitable(result):
@@ -283,8 +320,23 @@ async def auto_select_chat(request: ChatRequest):
             }
         )
 
+    # Help / onboarding intent (non-RAG)
+    if is_help_query(request.question):
+        return ChatResponse(
+            answer=help_answer(workflow="multiagent"),
+            pattern="auto",
+            session_id=request.session_id,
+            execution_time=0.0,
+            metadata={"help": True, "mode": "multiagent"},
+        )
+
+    # Normalize "auto" -> no override (selector decides)
+    override_pattern = request.pattern
+    if override_pattern == "auto":
+        override_pattern = None
+
     # Determine selected pattern
-    if request.auto_select_pattern and request.pattern is None:
+    if request.auto_select_pattern and override_pattern is None:
         sel = select_pattern(
             request.question,
             max_relative_cost=request.max_relative_cost,
@@ -295,7 +347,7 @@ async def auto_select_chat(request: ChatRequest):
         selection_mode = sel.mode
         selection_estimates = sel.estimates
     else:
-        selected_pattern = request.pattern or "sequential"
+        selected_pattern = override_pattern or "sequential"
         selection_reasoning = "Manual override via request.pattern / auto_select_pattern=false."
         selection_mode = "heuristic"
         selection_estimates = {}

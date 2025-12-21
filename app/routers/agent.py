@@ -2,12 +2,18 @@ from fastapi import APIRouter, UploadFile, File, Request
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 
+from app.agents.help_guide import is_help_query, help_answer
+
 from app.agents.doc_agent import run_document_agent
 from app.agents.guardrails import check_input_safety, check_output_safety
+from app.agents.inference_modes import InferenceMode
 from app.models.embeddings import ingest_documents
+from app.routers.feedback import router as feedback_router
 
 
 router = APIRouter()
+# Mount feedback under /agent so the UI can call POST /agent/feedback
+router.include_router(feedback_router, prefix="/agent")
 
 
 class TextIngestRequest(BaseModel):
@@ -96,6 +102,10 @@ async def agent_chat(payload: dict):
         question = payload.get("question") or payload.get("message")
         session_id = payload.get("session_id", "default")
         reset_session = payload.get("reset_session", False)
+        inference_mode = payload.get("inference_mode", "balanced")
+
+        if inference_mode not in ("low", "balanced", "high"):
+            inference_mode = "balanced"
 
         if not question:
             return {"error": "Missing 'question' or 'message'"}
@@ -120,9 +130,15 @@ async def agent_chat(payload: dict):
             }
 
         # ------------------------------------------
-        # 🤖 2) RUN DOCUMENT RAG AGENT
+        # 💡 Help / onboarding intent (non-RAG)
         # ------------------------------------------
-        raw_answer = await run_document_agent(session_id, question)
+        if is_help_query(question):
+            raw_answer = help_answer(workflow="structured")
+        else:
+            # ------------------------------------------
+            # 🤖 2) RUN DOCUMENT RAG AGENT
+            # ------------------------------------------
+            raw_answer = await run_document_agent(session_id, question, inference_mode=inference_mode)  # type: ignore[arg-type]
 
         # ------------------------------------------
         # 🔒 3) OUTPUT GUARDRAIL
@@ -143,7 +159,8 @@ async def agent_chat(payload: dict):
                 "stage": "output" if not gr_out.allowed else "none",
                 "blocked": not gr_out.allowed,
                 "reason": gr_out.reason if not gr_out.allowed else None
-            }
+            },
+            "metadata": {"inference_mode": inference_mode}
         }
 
     except ValueError as e:

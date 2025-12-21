@@ -8,9 +8,12 @@ import streamlit as st
 import requests
 import json
 import os
+import io
 from typing import Dict, List, Optional
 from datetime import datetime
 import uuid
+
+from pypdf import PdfReader
 
 # ============================================================================
 # CONFIGURATION
@@ -18,7 +21,8 @@ import uuid
 # Use environment variables for production, fallback to localhost for development
 
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "http://localhost:8000")
-AGENTIC_API_URL = os.getenv("AGENTIC_API_URL", "http://localhost:8001")
+# Default agentic URL to the same server since we now support a unified single API.
+AGENTIC_API_URL = os.getenv("AGENTIC_API_URL", STRUCTURED_API_URL)
 
 WORKFLOW_STRUCTURED = "Structured RAG"
 WORKFLOW_AGENTIC = "Agentic RAG"
@@ -123,6 +127,9 @@ if "workflow" not in st.session_state:
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
+if "inference_mode" not in st.session_state:
+    st.session_state.inference_mode = "balanced"
+
 if "api_status" not in st.session_state:
     st.session_state.api_status = {
         "structured": None,
@@ -154,6 +161,38 @@ def _is_multiagent_workflow(workflow: str) -> bool:
     return workflow.startswith("Multi-agent")
 
 
+def send_feedback(
+    *,
+    question: str,
+    answer: str,
+    thumbs_up: Optional[bool],
+    comment: Optional[str] = None,
+    expected_answer: Optional[str] = None,
+) -> Dict:
+    """
+    Send user feedback to backend so it can be logged to LangSmith.
+    Uses the Structured server (8000) because that's where /agent/feedback is mounted.
+    """
+    payload = {
+        "session_id": st.session_state.session_id,
+        "question": question,
+        "answer": answer,
+        "thumbs_up": thumbs_up,
+        "comment": comment,
+        "expected_answer": expected_answer,
+    }
+    try:
+        resp = requests.post(
+            f"{STRUCTURED_API_URL}/agent/feedback",
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"status": "error", "error": str(e)}
+
+
 def send_chat_message(
     question: str,
     workflow: str,
@@ -170,6 +209,7 @@ def send_chat_message(
     payload = {
         "question": question,
         "session_id": st.session_state.session_id,
+        "inference_mode": st.session_state.get("inference_mode", "balanced"),
     }
 
     if workflow == WORKFLOW_AGENTIC:
@@ -183,6 +223,7 @@ def send_chat_message(
             "question": question,
             "session_id": st.session_state.session_id,
             "auto_select_pattern": auto_select_pattern,
+            "inference_mode": st.session_state.get("inference_mode", "balanced"),
         }
         if not auto_select_pattern and multiagent_pattern:
             payload["pattern"] = multiagent_pattern
@@ -204,6 +245,47 @@ def send_chat_message(
             "error": f"API Error: {str(e)}",
             "answer": "Unable to connect to the API. Please ensure the server is running."
         }
+
+
+def ingest_texts(
+    *,
+    texts: List[str],
+    metadatas: Optional[List[Dict]] = None,
+    api_url: str = STRUCTURED_API_URL,
+) -> Dict:
+    """Ingest texts into the backend vector DB via /agent/ingest/json."""
+    payload = {"texts": texts, "metadatas": metadatas}
+    try:
+        resp = requests.post(f"{api_url}/agent/ingest/json", json=payload, timeout=120)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"status": "error", "error": str(e)}
+
+
+def get_kb_status(api_url: str = STRUCTURED_API_URL) -> Dict:
+    """Fetch vector DB status from the backend."""
+    try:
+        resp = requests.get(f"{api_url}/agent/debug/status", timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.RequestException as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    parts: list[str] = []
+    for page in reader.pages:
+        txt = page.extract_text() or ""
+        txt = txt.strip()
+        if txt:
+            parts.append(txt)
+    return "\n\n".join(parts).strip()
+
+
+def _json_to_text(obj: object) -> str:
+    return json.dumps(obj, ensure_ascii=False, indent=2)
 
 def format_guardrail_status(guardrail: Optional[Dict]) -> str:
     """Format guardrail status for display"""
@@ -241,6 +323,16 @@ with st.sidebar:
         key="workflow_selector"
     )
     st.session_state.workflow = selected_workflow
+
+    st.markdown("---")
+    st.subheader("🧠 Inference mode")
+    st.caption("Controls retrieval effort + verification strictness.")
+    st.session_state.inference_mode = st.selectbox(
+        "Mode",
+        options=["balanced", "low", "high"],
+        index=["balanced", "low", "high"].index(st.session_state.get("inference_mode", "balanced")),
+        help="balanced: recommended default; low: higher recall; high: strictest grounding.",
+    )
     
     # Workflow Description
     st.markdown("---")
@@ -321,6 +413,91 @@ with st.sidebar:
         st.success("✅ Multi-agent API: Online (via Structured server)")
     else:
         st.error("❌ Multi-agent API: Offline (Structured server down)")
+
+    # Knowledge Base Ingestion
+    st.markdown("---")
+    st.subheader("📥 Knowledge Base")
+    st.caption("Upload documents (PDF/JSON/TXT/MD) to improve retrieval.")
+
+    uploaded_files = st.file_uploader(
+        "Upload files",
+        type=["pdf", "json", "txt", "md"],
+        accept_multiple_files=True,
+    )
+    pasted_text = st.text_area(
+        "Or paste text to ingest",
+        height=120,
+        placeholder="Paste notes / docs here...",
+    )
+
+    cols_ingest = st.columns([1, 1])
+    if cols_ingest[0].button("Ingest", use_container_width=True):
+        texts: list[str] = []
+        metadatas: list[dict] = []
+
+        if pasted_text and pasted_text.strip():
+            texts.append(pasted_text.strip())
+            metadatas.append({"source": "pasted_text"})
+
+        for f in uploaded_files or []:
+            filename = getattr(f, "name", "uploaded")
+            suffix = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+            raw = f.getvalue()
+
+            try:
+                if suffix == "pdf":
+                    extracted = _extract_pdf_text(raw)
+                    if extracted:
+                        texts.append(extracted)
+                        metadatas.append({"filename": filename, "type": "pdf"})
+                    else:
+                        st.warning(f"No extractable text found in PDF: {filename}")
+                elif suffix == "json":
+                    obj = json.loads(raw.decode("utf-8", errors="ignore") or "{}")
+                    # If user uploaded our ingestion format, ingest each text as a separate item.
+                    if isinstance(obj, dict) and isinstance(obj.get("texts"), list):
+                        j_texts = [str(x) for x in obj.get("texts") if str(x).strip()]
+                        j_metas = obj.get("metadatas")
+                        if isinstance(j_metas, list) and len(j_metas) == len(j_texts):
+                            for t, m in zip(j_texts, j_metas):
+                                texts.append(t)
+                                meta = m if isinstance(m, dict) else {}
+                                meta.setdefault("filename", filename)
+                                meta.setdefault("type", "json")
+                                metadatas.append(meta)
+                        else:
+                            for t in j_texts:
+                                texts.append(t)
+                                metadatas.append({"filename": filename, "type": "json"})
+                    else:
+                        texts.append(_json_to_text(obj))
+                        metadatas.append({"filename": filename, "type": "json"})
+                else:
+                    text = raw.decode("utf-8", errors="ignore").strip()
+                    if text:
+                        texts.append(text)
+                        metadatas.append({"filename": filename, "type": suffix or "text"})
+            except Exception as e:
+                st.error(f"Failed to process {filename}: {e}")
+
+        if not texts:
+            st.warning("Nothing to ingest. Upload a file or paste some text.")
+        else:
+            result = ingest_texts(texts=texts, metadatas=metadatas, api_url=STRUCTURED_API_URL)
+            if result.get("status") == "success":
+                st.success(f"✅ Ingested {result.get('items_ingested')} items")
+            else:
+                st.error(f"❌ Ingest failed: {result.get('error') or result}")
+
+    if cols_ingest[1].button("KB Status", use_container_width=True):
+        status = get_kb_status(STRUCTURED_API_URL)
+        if status.get("status") == "error":
+            st.error(f"❌ Status failed: {status.get('error')}")
+        else:
+            total = (status.get("vector_db") or {}).get("total_documents")
+            st.info(f"Vector DB documents: {total}")
+            with st.expander("Details", expanded=False):
+                st.json(status)
     
     # Session Management
     st.markdown("---")
@@ -356,7 +533,7 @@ st.markdown(f"**Current Workflow:** {st.session_state.workflow}")
 chat_container = st.container()
 
 with chat_container:
-    for message in st.session_state.messages:
+    for idx, message in enumerate(st.session_state.messages):
         if message["role"] == "user":
             st.markdown(f"""
             <div class="user-message">
@@ -378,6 +555,8 @@ with chat_container:
                     meta_lines.append("Scores: " + json.dumps(metadata.get("evaluation_scores"), ensure_ascii=False))
                 if metadata.get("pattern_selection_mode"):
                     meta_lines.append(f"Select mode: {metadata.get('pattern_selection_mode')}")
+                if metadata.get("inference_mode"):
+                    meta_lines.append(f"Inference: {metadata.get('inference_mode')}")
             meta_html = ""
             if meta_lines:
                 meta_html = "<br><span style='color:#666; font-size:0.85rem;'>" + " | ".join(meta_lines) + "</span>"
@@ -394,6 +573,45 @@ with chat_container:
                 <div style="margin-top: 0.5rem;">{safe_content}</div>
             </div>
             """, unsafe_allow_html=True)
+
+            # Feedback controls (only for assistant messages that correspond to a user question)
+            q_for_msg = message.get("question")
+            if q_for_msg:
+                cols = st.columns([1, 1, 6])
+                up_key = f"fb_up_{idx}"
+                down_key = f"fb_down_{idx}"
+
+                if cols[0].button("👍", key=up_key):
+                    result = send_feedback(
+                        question=q_for_msg,
+                        answer=str(message.get("content", "")),
+                        thumbs_up=True,
+                    )
+                    if result.get("status") == "ok":
+                        cols[2].success("Feedback saved")
+                    else:
+                        cols[2].warning(f"Feedback not saved: {result.get('reason') or result.get('error')}")
+
+                if cols[1].button("👎", key=down_key):
+                    st.session_state[f"show_fb_form_{idx}"] = True
+
+                if st.session_state.get(f"show_fb_form_{idx}", False):
+                    with st.expander("Send correction (optional)", expanded=True):
+                        comment = st.text_area("Comment", key=f"fb_comment_{idx}")
+                        expected = st.text_area("Expected / corrected answer", key=f"fb_expected_{idx}")
+                        if st.button("Submit feedback", key=f"fb_submit_{idx}"):
+                            result = send_feedback(
+                                question=q_for_msg,
+                                answer=str(message.get("content", "")),
+                                thumbs_up=False,
+                                comment=comment or None,
+                                expected_answer=expected or None,
+                            )
+                            if result.get("status") == "ok":
+                                st.success("Feedback saved")
+                                st.session_state[f"show_fb_form_{idx}"] = False
+                            else:
+                                st.warning(f"Feedback not saved: {result.get('reason') or result.get('error')}")
 
 # Chat input
 st.markdown("---")
@@ -433,6 +651,7 @@ if user_input:
             "content": answer,
             "guardrail": guardrail,
             "metadata": metadata,
+            "question": user_input,
             "workflow": st.session_state.workflow,
             "timestamp": datetime.now().isoformat()
         })
