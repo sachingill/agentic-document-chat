@@ -15,6 +15,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 from app.agents.tools import retrieve_tool, keyword_search_tool, metadata_search_tool
+from app.agents.inference_modes import INFERENCE_CONFIGS, InferenceMode
+from app.agents.inference_utils import expand_queries
 
 # Import LLM factory for multi-provider support
 from multiagent.app.models.llm_providers import create_fast_llm
@@ -45,6 +47,9 @@ def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     question = state.get("question", "")
     current_context = state.get("context", [])
+    metadata = state.get("metadata", {}) or {}
+    mode: InferenceMode = metadata.get("inference_mode", "balanced")  # type: ignore
+    cfg = INFERENCE_CONFIGS.get(mode, INFERENCE_CONFIGS["balanced"])
     
     logger.info(f"🔍 Research Agent: Gathering information for: {question[:50]}...")
     
@@ -86,17 +91,20 @@ Respond with JSON:
             strategy = {"primary_strategy": "semantic", "needs_keyword": False, "needs_metadata": False}
         
         # Step 2: Execute search strategy
+        #
+        # IMPORTANT: Always do a semantic retrieval first.
+        # Reason: smaller/local models can misclassify the strategy (e.g., pick "metadata")
+        # which would otherwise skip retrieval entirely and cause empty context cascades.
         all_docs = []
         tools_used = []
         
-        # Primary semantic search (always do this)
-        if strategy.get("primary_strategy") in ["semantic", "combined"]:
-            logger.info("Using semantic search (retrieve_tool)")
-            result = retrieve_tool(question, k=10)
-            docs = result.get("results", [])
-            all_docs.extend(docs)
-            tools_used.append("retrieve_tool")
-            logger.info(f"Retrieved {len(docs)} documents from semantic search")
+        # Always run semantic search as the baseline
+        logger.info(f"Using semantic search (retrieve_tool) [baseline] mode={mode}")
+        result = retrieve_tool(question, k=cfg.base_k)
+        semantic_docs = result.get("results", []) or []
+        all_docs.extend(semantic_docs)
+        tools_used.append("retrieve_tool")
+        logger.info(f"Retrieved {len(semantic_docs)} documents from semantic search")
         
         # Keyword search if needed
         if strategy.get("needs_keyword") or strategy.get("primary_strategy") == "keyword":
@@ -108,7 +116,7 @@ Respond with JSON:
                 matches = result.get("matches", [])
                 all_docs.extend(matches)
             tools_used.append("keyword_search_tool")
-            logger.info(f"Found {len([m for m in all_docs if m not in docs])} additional documents from keyword search")
+            logger.info("Keyword search complete")
         
         # Metadata search if needed
         if strategy.get("needs_metadata") or strategy.get("primary_strategy") == "metadata":
@@ -123,6 +131,18 @@ Respond with JSON:
         
         # Step 3: Deduplicate results
         deduplicated_docs = _deduplicate_documents(all_docs)
+
+        # Second-pass retrieval if evidence is thin
+        if len(deduplicated_docs) < cfg.min_chunks:
+            logger.info(
+                f"Second-pass retrieval triggered (mode={mode}, have={len(deduplicated_docs)}, need={cfg.min_chunks})"
+            )
+            for q in expand_queries(question, mode=mode)[1:]:
+                result2 = retrieve_tool(q, k=cfg.second_pass_k)
+                more = result2.get("results", []) or []
+                all_docs.extend(more)
+            tools_used.append("retrieve_tool(second_pass)")
+            deduplicated_docs = _deduplicate_documents(all_docs)
         
         # Step 4: Rerank documents for quality (if we have multiple docs)
         # Note: Reranking is skipped in sync context to avoid async issues
@@ -139,6 +159,7 @@ Respond with JSON:
         state["metadata"]["research_tools_used"] = tools_used
         state["metadata"]["research_doc_count"] = len(deduplicated_docs)
         state["metadata"]["research_strategy"] = strategy.get("primary_strategy", "semantic")
+        state["metadata"]["inference_mode"] = mode
         
         logger.info(f"✅ Research Agent: Collected {len(deduplicated_docs)} unique documents")
         

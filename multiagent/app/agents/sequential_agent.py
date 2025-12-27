@@ -83,7 +83,8 @@ SEQUENTIAL_AGENT = build_sequential_graph()
 @traceable(name="run_sequential_agent", run_type="chain")
 async def run_sequential_agent(
     question: str,
-    session_id: str = "default"
+    session_id: str = "default",
+    inference_mode: str = "balanced",
 ) -> dict:
     """
     Run the sequential multi-agent workflow.
@@ -103,7 +104,8 @@ async def run_sequential_agent(
     initial_state = create_initial_state(
         question=question,
         session_id=session_id,
-        pattern="sequential"
+        pattern="sequential",
+        inference_mode=inference_mode,  # type: ignore[arg-type]
     )
     
     try:

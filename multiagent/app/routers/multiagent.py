@@ -23,6 +23,7 @@ from multiagent.app.agents.pattern_selector import select_pattern
 from multiagent.app.telemetry.selection_logger import log_selection_event
 from app.agents.guardrails import check_input_safety, check_output_safety
 from app.agents.help_guide import is_help_query, help_answer
+from app.agents.tools import retrieve_tool
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,29 @@ class ChatResponse(BaseModel):
     metadata: Optional[dict] = None
     error: Optional[str] = None
     guardrail: Optional[dict] = None
+    citations: Optional[list[dict]] = None
+
+
+def _citations_for_question(question: str, k: int = 5) -> list[dict]:
+    """Lightweight citation helper: return top retrieved chunks with metadata."""
+    try:
+        res = retrieve_tool(question, k=k)
+        docs = res.get("documents") if isinstance(res, dict) else None
+        if not isinstance(docs, list):
+            return []
+        citations: list[dict] = []
+        for d in docs[:k]:
+            if not isinstance(d, dict):
+                continue
+            citations.append(
+                {
+                    "text": str(d.get("text", ""))[:500],
+                    "metadata": d.get("metadata") or {},
+                }
+            )
+        return citations
+    except Exception:
+        return []
 
 
 @router.post("/sequential/chat", response_model=ChatResponse)
@@ -66,6 +90,18 @@ async def sequential_chat(request: ChatRequest):
     Best for: Complex questions requiring multiple steps
     """
     try:
+        # Help / onboarding intent (non-RAG)
+        # Important: check this BEFORE guardrails/LLMs so "help" works even if the guard model is unavailable.
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="sequential",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+                citations=[],
+            )
+
         # Input guardrail
         gr_in = check_input_safety(request.question)
         if not gr_in.allowed:
@@ -79,16 +115,6 @@ async def sequential_chat(request: ChatRequest):
                     "blocked": True,
                     "reason": gr_in.reason
                 }
-            )
-
-        # Help / onboarding intent (non-RAG)
-        if is_help_query(request.question):
-            return ChatResponse(
-                answer=help_answer(workflow="multiagent"),
-                pattern="sequential",
-                session_id=request.session_id,
-                execution_time=0.0,
-                metadata={"help": True, "mode": "multiagent"},
             )
         
         # Run sequential agent (async)
@@ -119,7 +145,8 @@ async def sequential_chat(request: ChatRequest):
             session_id=result.get("session_id", request.session_id),
             execution_time=result.get("execution_time", 0.0),
             metadata=result.get("metadata"),
-            guardrail=guardrail_info
+            guardrail=guardrail_info,
+            citations=_citations_for_question(request.question),
         )
         
     except Exception as e:
@@ -139,6 +166,17 @@ async def parallel_chat(request: ChatRequest):
     Best for: Comparing different approaches, ensuring best answer
     """
     try:
+        # Help / onboarding intent (non-RAG)
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="parallel",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+                citations=[],
+            )
+
         # Input guardrail
         gr_in = check_input_safety(request.question)
         if not gr_in.allowed:
@@ -152,16 +190,6 @@ async def parallel_chat(request: ChatRequest):
                     "blocked": True,
                     "reason": gr_in.reason
                 }
-            )
-
-        # Help / onboarding intent (non-RAG)
-        if is_help_query(request.question):
-            return ChatResponse(
-                answer=help_answer(workflow="multiagent"),
-                pattern="parallel",
-                session_id=request.session_id,
-                execution_time=0.0,
-                metadata={"help": True, "mode": "multiagent"},
             )
         
         # Run parallel agent
@@ -200,7 +228,8 @@ async def parallel_chat(request: ChatRequest):
             session_id=result.get("session_id", request.session_id),
             execution_time=result.get("execution_time", 0.0),
             metadata=metadata,
-            guardrail=guardrail_info
+            guardrail=guardrail_info,
+            citations=_citations_for_question(request.question),
         )
         
     except Exception as e:
@@ -220,6 +249,17 @@ async def supervisor_chat(request: ChatRequest):
     Best for: Complex multi-domain questions
     """
     try:
+        # Help / onboarding intent (non-RAG)
+        if is_help_query(request.question):
+            return ChatResponse(
+                answer=help_answer(workflow="multiagent"),
+                pattern="supervisor",
+                session_id=request.session_id,
+                execution_time=0.0,
+                metadata={"help": True, "mode": "multiagent"},
+                citations=[],
+            )
+
         # Input guardrail
         gr_in = check_input_safety(request.question)
         if not gr_in.allowed:
@@ -233,16 +273,6 @@ async def supervisor_chat(request: ChatRequest):
                     "blocked": True,
                     "reason": gr_in.reason
                 }
-            )
-
-        # Help / onboarding intent (non-RAG)
-        if is_help_query(request.question):
-            return ChatResponse(
-                answer=help_answer(workflow="multiagent"),
-                pattern="supervisor",
-                session_id=request.session_id,
-                execution_time=0.0,
-                metadata={"help": True, "mode": "multiagent"},
             )
         
         # Run supervisor agent
@@ -283,7 +313,8 @@ async def supervisor_chat(request: ChatRequest):
             session_id=result.get("session_id", request.session_id),
             execution_time=result.get("execution_time", 0.0),
             metadata=metadata,
-            guardrail=guardrail_info
+            guardrail=guardrail_info,
+            citations=_citations_for_question(request.question),
         )
         
     except Exception as e:
@@ -305,6 +336,17 @@ async def auto_select_chat(request: ChatRequest):
     - heuristic selection (default)
     - optional LLM selection via MULTIAGENT_PATTERN_SELECTOR_MODE=llm
     """
+    # Help / onboarding intent (non-RAG)
+    if is_help_query(request.question):
+        return ChatResponse(
+            answer=help_answer(workflow="multiagent"),
+            pattern="auto",
+            session_id=request.session_id,
+            execution_time=0.0,
+            metadata={"help": True, "mode": "multiagent"},
+            citations=[],
+        )
+
     # Safety first: do not run selector/agents if input is unsafe
     gr_in = check_input_safety(request.question)
     if not gr_in.allowed:
@@ -318,16 +360,6 @@ async def auto_select_chat(request: ChatRequest):
                 "blocked": True,
                 "reason": gr_in.reason
             }
-        )
-
-    # Help / onboarding intent (non-RAG)
-    if is_help_query(request.question):
-        return ChatResponse(
-            answer=help_answer(workflow="multiagent"),
-            pattern="auto",
-            session_id=request.session_id,
-            execution_time=0.0,
-            metadata={"help": True, "mode": "multiagent"},
         )
 
     # Normalize "auto" -> no override (selector decides)

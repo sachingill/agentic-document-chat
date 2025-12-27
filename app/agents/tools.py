@@ -1,11 +1,12 @@
 # app/agents/tools.py
 
 from app.models.embeddings import get_retriever
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
+from app.models.llm_factory import summary_llm
+from typing import Any
 
-# Use OpenAI for summarization / synthesis tools
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+# Summarization model (OpenAI or vLLM via env)
+llm = summary_llm(temperature=0.1)
 
 
 # 1. Retrieval tool (most important for RAG)
@@ -25,10 +26,17 @@ def retrieve_tool(query: str, k: int = 10):
     else:
         docs = retriever.get_relevant_documents(query)
 
-    return {
-        "results": [d.page_content for d in docs],
-        "count": len(docs),
-    }
+    results = [d.page_content for d in docs]
+    documents: list[dict[str, Any]] = [
+        {"text": d.page_content, "metadata": getattr(d, "metadata", {}) or {}} for d in docs
+    ]
+
+    # Backwards compatible keys:
+    # - results: list[str]
+    # - count: int
+    # New key:
+    # - documents: list[{text, metadata}]
+    return {"results": results, "documents": documents, "count": len(docs)}
 
 
 # 2. Summarization tool

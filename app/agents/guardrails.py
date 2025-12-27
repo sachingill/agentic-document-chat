@@ -3,11 +3,13 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
 
+from app.models.llm_factory import guard_llm
+import re
+
 # You can later swap this to a dedicated safety model or LlamaGuard
-_guard_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+_guard_llm = guard_llm(temperature=0.0)
 
 
 @dataclass
@@ -23,7 +25,46 @@ def _ask_guard_llm(prompt: str) -> str:
     return resp.content.strip() if hasattr(resp, "content") else str(resp).strip()
 
 
-@traceable(name="check_input_safety", run_type="guardrail")
+def _heuristic_block_reason(text: str) -> str | None:
+    """
+    Lightweight heuristic safety net.
+
+    We only BLOCK when we see strong signals of:
+    - prompt injection / system prompt exfiltration
+    - explicit instructions for wrongdoing / self-harm / violence
+
+    Otherwise we ALLOW (fail-open) to avoid local-model formatting issues
+    causing false positives on safe, technical questions.
+    """
+    t = (text or "").lower()
+
+    # Prompt injection / exfiltration indicators
+    injection_patterns = [
+        r"\bignore (all|any|previous|prior) (instructions|rules)\b",
+        r"\b(system prompt|developer message|hidden prompt)\b",
+        r"\b(reveal|show|print|leak)\b.*\b(prompt|system|instructions)\b",
+        r"\b(api key|secret|password|token)\b",
+        r"\bexfiltrat(e|ion)\b",
+    ]
+    for pat in injection_patterns:
+        if re.search(pat, t):
+            return "Prompt-injection or secret-exfiltration attempt (heuristic)."
+
+    # Strongly unsafe content indicators (coarse)
+    unsafe_patterns = [
+        r"\bhow to\b.*\b(make|build)\b.*\b(bomb|explosive)\b",
+        r"\bhow to\b.*\b(hack|ddos|steal)\b",
+        r"\bkill yourself\b|\bsuicide\b",
+        r"\bmake\b.*\b(drug|meth|cocaine)\b",
+    ]
+    for pat in unsafe_patterns:
+        if re.search(pat, t):
+            return "Request appears to ask for harmful/illegal instructions (heuristic)."
+
+    return None
+
+
+@traceable(name="check_input_safety", run_type="chain")
 def check_input_safety(user_message: str) -> GuardrailResult:
     """
     Input guardrail: checks for harmful content & prompt injection attempts.
@@ -58,14 +99,14 @@ Decide:
         reason = decision[len("BLOCK:") :].strip() or "Blocked by guardrail"
         return GuardrailResult(allowed=False, reason=reason)
 
-    # Fallback: be conservative
-    return GuardrailResult(
-        allowed=False,
-        reason="Guardrail could not classify request safely; blocking by default.",
-    )
+    # Fallback: fail-open with heuristic blocklist to avoid false positives on local LLMs
+    reason = _heuristic_block_reason(user_message)
+    if reason:
+        return GuardrailResult(allowed=False, reason=reason)
+    return GuardrailResult(allowed=True, reason="Guardrail uncertain; allowed by default.")
 
 
-@traceable(name="check_output_safety", run_type="guardrail")
+@traceable(name="check_output_safety", run_type="chain")
 def check_output_safety(answer: str) -> GuardrailResult:
     """
     Output guardrail: ensures the answer doesn't contain unsafe content.
@@ -110,9 +151,9 @@ Reply with:
             allowed=False, reason=reason, sanitized_text=safe_stub
         )
 
-    # Fallback: conservative
-    return GuardrailResult(
-        allowed=False,
-        reason="Guardrail could not classify answer safely; blocking by default.",
-        sanitized_text="I’m not able to answer that safely.",
-    )
+    # Fallback: fail-open (do not block technical answers due to classifier formatting issues)
+    reason = _heuristic_block_reason(answer)
+    if reason:
+        safe_stub = "I’m not able to answer that safely."
+        return GuardrailResult(allowed=False, reason=reason, sanitized_text=safe_stub)
+    return GuardrailResult(allowed=True, reason="Guardrail uncertain; allowed by default.", sanitized_text=answer)

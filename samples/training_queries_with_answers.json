@@ -1,0 +1,192 @@
+[
+  {
+    "query": "What are the three main authentication methods?",
+    "expected_answer": "The three main authentication methods are OAuth2, JWT tokens, and API keys.",
+    "expected_entities": ["OAuth2", "JWT", "API keys", "three methods"],
+    "expected_doc_ids": ["doc_auth_001"],
+    "difficulty": "easy",
+    "category": "authentication",
+    "answer_type": "list"
+  },
+  {
+    "query": "How does OAuth2 authentication flow work?",
+    "expected_answer": "OAuth2 follows the authorization code flow: user is redirected to authorization server, server validates credentials and issues authorization code, code is exchanged for access token and refresh token.",
+    "expected_entities": ["OAuth2", "authorization code", "access token", "refresh token"],
+    "expected_doc_ids": ["doc_auth_002"],
+    "difficulty": "medium",
+    "category": "authentication",
+    "answer_type": "process"
+  },
+  {
+    "query": "What causes database timeouts and how to resolve them?",
+    "expected_answer": "Database timeouts occur when queries exceed 30 seconds. Causes include: slow queries, connection pool exhaustion, database server overload, network latency. Resolution: check query execution time, review connection pool settings, optimize queries with indexes, scale database resources.",
+    "expected_entities": ["database timeout", "30 seconds", "connection pool", "slow queries", "indexes"],
+    "expected_doc_ids": ["doc_error_002"],
+    "difficulty": "medium",
+    "category": "error-handling",
+    "answer_type": "troubleshooting"
+  },
+  {
+    "query": "What are the error levels in the logging system?",
+    "expected_answer": "The error levels are: INFO, WARN, ERROR, and FATAL. ERROR indicates application failures requiring attention. FATAL errors cause application shutdown.",
+    "expected_entities": ["INFO", "WARN", "ERROR", "FATAL"],
+    "expected_doc_ids": ["doc_error_001"],
+    "difficulty": "easy",
+    "category": "error-handling",
+    "answer_type": "list"
+  },
+  {
+    "query": "How is the database connection pool configured?",
+    "expected_answer": "The database connection pool has a maximum of 50 connections. Idle connections are kept for 5 minutes. Connection health checks run every 30 seconds.",
+    "expected_entities": ["50 connections", "5 minutes", "30 seconds", "connection pool"],
+    "expected_doc_ids": ["doc_db_001"],
+    "difficulty": "easy",
+    "category": "database",
+    "answer_type": "configuration"
+  },
+  {
+    "query": "What are the API rate limits for different user types?",
+    "expected_answer": "Rate limits: 100 requests per minute for authenticated users, 20 requests per minute for unauthenticated users, 1000 requests per hour for API keys.",
+    "expected_entities": ["100 requests/minute", "20 requests/minute", "1000 requests/hour", "authenticated", "unauthenticated", "API keys"],
+    "expected_doc_ids": ["doc_api_001"],
+    "difficulty": "easy",
+    "category": "api",
+    "answer_type": "configuration"
+  },
+  {
+    "query": "What security measures are implemented in the system?",
+    "expected_answer": "Security measures include: input validation, output sanitization, HTTPS enforcement, SQL injection prevention, XSS protection, CSRF tokens, password hashing with bcrypt, two-factor authentication, and security headers.",
+    "expected_entities": ["input validation", "HTTPS", "SQL injection", "XSS", "CSRF", "bcrypt", "2FA"],
+    "expected_doc_ids": ["doc_security_001"],
+    "difficulty": "medium",
+    "category": "security",
+    "answer_type": "list"
+  },
+  {
+    "query": "How does the caching system work?",
+    "expected_answer": "Multi-layer caching: L1 cache (in-memory, 1 minute TTL), L2 cache (Redis, 5 minutes TTL), L3 cache (CDN, 1 year TTL). Cache invalidation uses time-based expiration, event-based invalidation, and manual invalidation.",
+    "expected_entities": ["L1 cache", "L2 cache", "L3 cache", "Redis", "CDN", "TTL"],
+    "expected_doc_ids": ["doc_cache_001"],
+    "difficulty": "medium",
+    "category": "performance",
+    "answer_type": "architecture"
+  },
+  {
+    "query": "What is the RCA process for analyzing errors?",
+    "expected_answer": "RCA process has five steps: 1) Identify problem and gather error logs, 2) Analyze error patterns and correlations, 3) Investigate potential root causes, 4) Verify root cause through testing, 5) Implement fix and monitor.",
+    "expected_entities": ["five steps", "error logs", "error patterns", "root cause", "testing"],
+    "expected_doc_ids": ["doc_rca_001"],
+    "difficulty": "medium",
+    "category": "rca",
+    "answer_type": "process"
+  },
+  {
+    "query": "What are common error patterns in production?",
+    "expected_answer": "Common error patterns: AuthenticationError (401/403) from invalid credentials, DatabaseTimeoutError from slow queries, RateLimitError (429) from exceeding limits, ValidationError (400) from invalid input, InternalServerError (500) from unhandled exceptions.",
+    "expected_entities": ["AuthenticationError", "DatabaseTimeoutError", "RateLimitError", "ValidationError", "InternalServerError"],
+    "expected_doc_ids": ["doc_rca_002"],
+    "difficulty": "easy",
+    "category": "rca",
+    "answer_type": "list"
+  },
+  {
+    "query": "How does OTP verification work?",
+    "expected_answer": "OTP system uses 6-digit numeric codes generated with TOTP algorithm. OTP validity is 5 minutes. Maximum 3 failed attempts before 15-minute account lockout. OTP codes are sent via SMS or email.",
+    "expected_entities": ["6-digit", "TOTP", "5 minutes", "3 attempts", "15 minutes", "SMS", "email"],
+    "expected_doc_ids": ["doc_otp_001"],
+    "difficulty": "medium",
+    "category": "authentication",
+    "answer_type": "process"
+  },
+  {
+    "query": "What are the download rate limits?",
+    "expected_answer": "Download rate limits: 10 downloads per hour per user, 100 downloads per hour per IP address. Large files (>100MB) require special permissions.",
+    "expected_entities": ["10 downloads/hour", "100 downloads/hour", "100MB"],
+    "expected_doc_ids": ["doc_download_001"],
+    "difficulty": "easy",
+    "category": "download",
+    "answer_type": "configuration"
+  },
+  {
+    "query": "What monitoring metrics are collected?",
+    "expected_answer": "Key metrics include: request rate, error rate, response time, and database query time. Metrics are collected every 10 seconds and stored for 90 days.",
+    "expected_entities": ["request rate", "error rate", "response time", "database query time", "10 seconds", "90 days"],
+    "expected_doc_ids": ["doc_monitoring_001"],
+    "difficulty": "easy",
+    "category": "monitoring",
+    "answer_type": "list"
+  },
+  {
+    "query": "What is the deployment process?",
+    "expected_answer": "Deployment process: 1) Code commit triggers build, 2) Automated tests run, 3) Build Docker image, 4) Deploy to staging, 5) Run smoke tests, 6) Deploy to production with blue-green deployment.",
+    "expected_entities": ["CI/CD", "automated tests", "Docker", "staging", "blue-green deployment"],
+    "expected_doc_ids": ["doc_deploy_001"],
+    "difficulty": "medium",
+    "category": "deployment",
+    "answer_type": "process"
+  },
+  {
+    "query": "What are the password requirements?",
+    "expected_answer": "Password requirements: minimum 12 characters, must include uppercase, lowercase, numbers, and special characters. Passwords are hashed using bcrypt with cost factor 12.",
+    "expected_entities": ["12 characters", "uppercase", "lowercase", "numbers", "special characters", "bcrypt", "cost factor 12"],
+    "expected_doc_ids": ["doc_security_001"],
+    "difficulty": "easy",
+    "category": "security",
+    "answer_type": "configuration"
+  },
+  {
+    "query": "How are slow queries optimized?",
+    "expected_answer": "Slow query optimization techniques: avoid SELECT *, use LIMIT clauses, optimize JOIN operations. Database indexes are created on frequently queried columns. Slow query log identifies queries taking longer than 1 second.",
+    "expected_entities": ["SELECT *", "LIMIT", "JOIN", "indexes", "slow query log", "1 second"],
+    "expected_doc_ids": ["doc_perf_001"],
+    "difficulty": "medium",
+    "category": "performance",
+    "answer_type": "troubleshooting"
+  },
+  {
+    "query": "What log levels are used?",
+    "expected_answer": "Log levels: DEBUG (detailed debugging), INFO (general information), WARN (warnings), ERROR (errors), FATAL (critical failures).",
+    "expected_entities": ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"],
+    "expected_doc_ids": ["doc_logging_001"],
+    "difficulty": "easy",
+    "category": "logging",
+    "answer_type": "list"
+  },
+  {
+    "query": "What is the testing strategy?",
+    "expected_answer": "Testing pyramid: 70% unit tests, 20% integration tests, 10% end-to-end tests. Test coverage target is >80%. Automated tests run on every commit.",
+    "expected_entities": ["70% unit tests", "20% integration", "10% e2e", "80% coverage"],
+    "expected_doc_ids": ["doc_test_001"],
+    "difficulty": "easy",
+    "category": "testing",
+    "answer_type": "strategy"
+  },
+  {
+    "query": "How long do access tokens last?",
+    "expected_answer": "Access tokens are short-lived (1 hour) while refresh tokens last 30 days.",
+    "expected_entities": ["1 hour", "30 days", "access token", "refresh token"],
+    "expected_doc_ids": ["doc_auth_002"],
+    "difficulty": "easy",
+    "category": "authentication",
+    "answer_type": "fact"
+  },
+  {
+    "query": "What happens when API rate limits are exceeded?",
+    "expected_answer": "When rate limits are exceeded, the API returns HTTP 429 Too Many Requests. Rate limit headers are included in responses showing limit, remaining, and reset time.",
+    "expected_entities": ["HTTP 429", "Too Many Requests", "rate limit headers"],
+    "expected_doc_ids": ["doc_api_001"],
+    "difficulty": "easy",
+    "category": "api",
+    "answer_type": "behavior"
+  },
+  {
+    "query": "How are errors correlated to identify patterns?",
+    "expected_answer": "Error correlation analyzes: error frequency, error types, affected users, time patterns, and correlation with deployments. The system maintains a knowledge base of known issues and their resolutions.",
+    "expected_entities": ["error frequency", "error types", "time patterns", "deployments", "knowledge base"],
+    "expected_doc_ids": ["doc_rca_001"],
+    "difficulty": "hard",
+    "category": "rca",
+    "answer_type": "process"
+  }
+]
+

@@ -1,0 +1,5 @@
+Line 1: Hello
+Line 2: World
+Line 3: Python
+Line 4: Generator
+Line 5: Memory Efficient!

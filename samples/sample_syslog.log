@@ -1,0 +1,9 @@
+Jan 15 10:30:00 api-server auth-service[1234]: ERROR AuthenticationError: Invalid credentials provided
+Jan 15 10:32:15 api-server middleware[1234]: ERROR ForbiddenError: Insufficient permissions
+Jan 15 11:00:00 api-server api-server[1234]: WARN Slow request: /api/reports/generate took 3500ms
+Jan 15 11:15:30 auth-service otp-service[5678]: ERROR OTPVerificationError: Invalid OTP code
+Jan 15 12:00:00 db-service mysql-connector[9012]: ERROR DatabaseTimeoutError: MySQL query timeout
+Jan 15 12:30:00 api-server api-server[1234]: INFO Request completed successfully
+Jan 15 13:00:00 download-service download-service[3456]: ERROR DownloadRateLimitError: Rate limit exceeded
+Jan 15 14:00:00 api-server auth-service[1234]: ERROR AuthenticationError: Session expired
+

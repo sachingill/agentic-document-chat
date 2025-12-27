@@ -15,7 +15,6 @@ DIFFERENCES FROM STRUCTURED RAG:
 
 from typing import TypedDict, List, Optional, Literal
 from langgraph.graph import StateGraph, END
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
 import json
 import logging
@@ -58,11 +57,13 @@ class AgenticState(TypedDict):
 # ============================================================================
 # STEP 2: LLM FOR AGENTIC DECISIONS
 # ============================================================================
-# Why: Need a reasoning LLM that can make decisions
+# Use centralized factory so we can run locally (Ollama) or fall back to OpenAI.
 # ============================================================================
 
-agent_llm = ChatOpenAI(model="gpt-4o", temperature=0.1)  # Main reasoning LLM
-decision_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)  # Fast decision LLM
+from app.models.llm_factory import main_llm, fast_llm
+
+agent_llm = main_llm(temperature=0.1)     # Higher quality reasoning (policy "main")
+decision_llm = fast_llm(temperature=0.0)  # Fast deterministic decisions (policy "fast")
 
 
 # ============================================================================

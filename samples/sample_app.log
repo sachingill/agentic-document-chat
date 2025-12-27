@@ -1,0 +1,34 @@
+2024-01-15 10:30:00 INFO Starting application server
+2024-01-15 10:30:05 INFO Database connection established
+2024-01-15 10:30:10 ERROR AuthenticationError: Invalid credentials provided
+  File "/app/auth.py", line 45, in authenticate
+    if not user.verify_password(password):
+  File "/app/models/user.py", line 123, in verify_password
+    raise AuthenticationError("Invalid credentials")
+AuthenticationError: Invalid credentials provided
+2024-01-15 10:32:15 ERROR ForbiddenError: Insufficient permissions to access resource
+  File "/app/middleware.py", line 78, in check_permissions
+    raise ForbiddenError("Insufficient permissions")
+ForbiddenError: Insufficient permissions to access resource
+2024-01-15 11:00:00 WARN Slow request detected: /api/reports/generate took 3500ms
+2024-01-15 11:15:30 ERROR OTPVerificationError: Invalid OTP code provided
+  File "/app/otp.py", line 67, in verify_otp
+    if otp_code != stored_otp:
+      raise OTPVerificationError("Invalid OTP")
+OTPVerificationError: Invalid OTP code provided
+2024-01-15 12:00:00 ERROR DatabaseTimeoutError: MySQL query timeout after 30 seconds
+  File "/app/db.py", line 234, in execute_query
+    result = connection.execute(query)
+  File "/app/mysql_connector.py", line 156, in execute
+    raise DatabaseTimeoutError("Query timeout")
+DatabaseTimeoutError: MySQL query timeout after 30 seconds
+2024-01-15 12:30:00 INFO Request completed successfully
+2024-01-15 13:00:00 ERROR DownloadRateLimitError: Too many download requests
+  File "/app/download.py", line 134, in download_file
+    raise DownloadRateLimitError("Rate limit exceeded")
+DownloadRateLimitError: Too many download requests
+2024-01-15 14:00:00 ERROR AuthenticationError: Session expired
+  File "/app/auth.py", line 89, in validate_session
+    raise AuthenticationError("Session expired")
+AuthenticationError: Session expired
+

@@ -20,6 +20,7 @@ class AgenticChatRequest(BaseModel):
 class AgenticChatResponse(BaseModel):
     answer: str
     metadata: dict
+    citations: list[dict] = []
 
 
 @router.post("/agentic/chat", response_model=AgenticChatResponse)
@@ -32,6 +33,7 @@ def agentic_chat(req: AgenticChatRequest) -> AgenticChatResponse:
                 "inference_mode": req.inference_mode,
                 "help": True,
             },
+            citations=[],
         )
     result = run_agentic(req.question, max_iters=req.max_iters, inference_mode=req.inference_mode)
     return AgenticChatResponse(
@@ -42,6 +44,7 @@ def agentic_chat(req: AgenticChatRequest) -> AgenticChatResponse:
             "mode": "agentic-lite",
             "inference_mode": req.inference_mode,
         },
+        citations=getattr(result, "citations", []) or [],
     )
 
 

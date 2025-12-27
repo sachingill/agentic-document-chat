@@ -1,0 +1,631 @@
+{
+  "errors": [
+    {
+      "message": "AuthenticationError: Invalid credentials provided",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 45, in authenticate\n    if not user.verify_password(password):\n  File \"/app/models/user.py\", line 123, in verify_password\n    raise AuthenticationError(\"Invalid credentials\")\nAuthenticationError: Invalid credentials provided",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/auth/login",
+        "user_id": "user_123",
+        "ip_address": "192.168.1.100"
+      }
+    },
+    {
+      "message": "ForbiddenError: Insufficient permissions to access resource",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/middleware.py\", line 78, in check_permissions\n    raise ForbiddenError(\"Insufficient permissions\")\nForbiddenError: Insufficient permissions to access resource",
+      "timestamp": "2024-01-15T10:32:15Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/users/delete",
+        "user_id": "user_456",
+        "ip_address": "192.168.1.101"
+      }
+    },
+    {
+      "message": "OTPVerificationError: Invalid OTP code provided",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 67, in verify_otp\n    if otp_code != stored_otp:\n      raise OTPVerificationError(\"Invalid OTP\")\nOTPVerificationError: Invalid OTP code provided",
+      "timestamp": "2024-01-15T11:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_789",
+        "otp_attempts": 3
+      }
+    },
+    {
+      "message": "OTPExpiredError: OTP code has expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 89, in verify_otp\n    if datetime.now() > otp.expires_at:\n      raise OTPExpiredError(\"OTP expired\")\nOTPExpiredError: OTP code has expired",
+      "timestamp": "2024-01-15T11:15:30Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_321"
+      }
+    },
+    {
+      "message": "DownloadRateLimitError: Too many download requests",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 134, in download_file\n    raise DownloadRateLimitError(\"Rate limit exceeded\")\nDownloadRateLimitError: Too many download requests",
+      "timestamp": "2024-01-15T12:00:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "429",
+        "endpoint": "/api/download/file/12345",
+        "user_id": "user_999",
+        "download_count": 150
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL query timeout after 30 seconds",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 234, in execute_query\n    result = connection.execute(query)\n  File \"/app/mysql_connector.py\", line 156, in execute\n    raise DatabaseTimeoutError(\"Query timeout\")\nDatabaseTimeoutError: MySQL query timeout after 30 seconds",
+      "timestamp": "2024-01-15T12:30:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/users/search",
+        "query_time": 30.5,
+        "database": "mysql"
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Request took 3500ms to complete",
+      "stack_trace": "Request processing time exceeded threshold\nEndpoint: /api/reports/generate\nProcessing time: 3500ms\nThreshold: 3000ms",
+      "timestamp": "2024-01-15T13:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/reports/generate",
+        "latency_ms": 3500,
+        "user_id": "user_555"
+      }
+    },
+    {
+      "message": "AuthenticationError: Session expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 89, in validate_session\n    raise AuthenticationError(\"Session expired\")\nAuthenticationError: Session expired",
+      "timestamp": "2024-01-15T13:15:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/users/profile",
+        "user_id": "user_111"
+      }
+    },
+    {
+      "message": "ForbiddenError: Access denied to admin endpoint",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/admin.py\", line 45, in check_admin\n    raise ForbiddenError(\"Admin access required\")\nForbiddenError: Access denied to admin endpoint",
+      "timestamp": "2024-01-15T13:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/admin/users",
+        "user_id": "user_222"
+      }
+    },
+    {
+      "message": "OTPVerificationError: OTP code mismatch",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 72, in verify_otp\n    raise OTPVerificationError(\"Code mismatch\")\nOTPVerificationError: OTP code mismatch",
+      "timestamp": "2024-01-15T14:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_333"
+      }
+    },
+    {
+      "message": "DownloadAbuseError: Suspicious download pattern detected",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 201, in download_file\n    raise DownloadAbuseError(\"Suspicious pattern\")\nDownloadAbuseError: Suspicious download pattern detected",
+      "timestamp": "2024-01-15T14:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/download/file/67890",
+        "user_id": "user_444",
+        "download_count": 200
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL connection pool exhausted",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 189, in get_connection\n    raise DatabaseTimeoutError(\"Pool exhausted\")\nDatabaseTimeoutError: MySQL connection pool exhausted",
+      "timestamp": "2024-01-15T15:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/orders/create",
+        "database": "mysql",
+        "pool_size": 0
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Request latency 4200ms",
+      "stack_trace": "Request processing exceeded threshold\nEndpoint: /api/analytics/process\nLatency: 4200ms",
+      "timestamp": "2024-01-15T15:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/analytics/process",
+        "latency_ms": 4200
+      }
+    },
+    {
+      "message": "AuthenticationError: Token validation failed",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 156, in validate_token\n    raise AuthenticationError(\"Invalid token\")\nAuthenticationError: Token validation failed",
+      "timestamp": "2024-01-15T16:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/data/fetch",
+        "user_id": "user_666"
+      }
+    },
+    {
+      "message": "ForbiddenError: Resource access denied",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/permissions.py\", line 98, in check_access\n    raise ForbiddenError(\"Access denied\")\nForbiddenError: Resource access denied",
+      "timestamp": "2024-01-15T16:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/files/delete",
+        "user_id": "user_777"
+      }
+    },
+    {
+      "message": "OTPExpiredError: One-time password expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 95, in verify_otp\n    raise OTPExpiredError(\"OTP expired\")\nOTPExpiredError: One-time password expired",
+      "timestamp": "2024-01-15T17:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_888"
+      }
+    },
+    {
+      "message": "DownloadRateLimitError: Maximum downloads per hour exceeded",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 142, in download_file\n    raise DownloadRateLimitError(\"Rate limit\")\nDownloadRateLimitError: Maximum downloads per hour exceeded",
+      "timestamp": "2024-01-15T17:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "429",
+        "endpoint": "/api/download/file/11111",
+        "user_id": "user_101",
+        "download_count": 100
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL query execution timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 267, in execute_query\n    raise DatabaseTimeoutError(\"Query timeout\")\nDatabaseTimeoutError: MySQL query execution timeout",
+      "timestamp": "2024-01-15T18:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/products/search",
+        "query_time": 32.1,
+        "database": "mysql"
+      }
+    },
+    {
+      "message": "SlowRequestWarning: High latency detected: 3800ms",
+      "stack_trace": "Request processing time: 3800ms\nEndpoint: /api/batch/process\nThreshold: 3000ms",
+      "timestamp": "2024-01-15T18:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/batch/process",
+        "latency_ms": 3800
+      }
+    },
+    {
+      "message": "AuthenticationError: Credentials invalid",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 52, in authenticate\n    raise AuthenticationError(\"Invalid credentials\")\nAuthenticationError: Credentials invalid",
+      "timestamp": "2024-01-15T19:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/auth/login",
+        "user_id": "user_202"
+      }
+    },
+    {
+      "message": "ForbiddenError: Permission denied",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/middleware.py\", line 102, in authorize\n    raise ForbiddenError(\"Permission denied\")\nForbiddenError: Permission denied",
+      "timestamp": "2024-01-15T19:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/admin/settings",
+        "user_id": "user_303"
+      }
+    },
+    {
+      "message": "OTPVerificationError: Invalid verification code",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 68, in verify_otp\n    raise OTPVerificationError(\"Invalid code\")\nOTPVerificationError: Invalid verification code",
+      "timestamp": "2024-01-15T20:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_404"
+      }
+    },
+    {
+      "message": "DownloadAbuseError: Unusual download activity",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 198, in download_file\n    raise DownloadAbuseError(\"Abuse detected\")\nDownloadAbuseError: Unusual download activity",
+      "timestamp": "2024-01-15T20:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/download/file/22222",
+        "user_id": "user_505",
+        "download_count": 180
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL connection timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 201, in get_connection\n    raise DatabaseTimeoutError(\"Connection timeout\")\nDatabaseTimeoutError: MySQL connection timeout",
+      "timestamp": "2024-01-15T21:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/inventory/update",
+        "database": "mysql",
+        "connection_timeout": 30
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Request took 4500ms",
+      "stack_trace": "Processing time exceeded\nEndpoint: /api/export/data\nTime: 4500ms",
+      "timestamp": "2024-01-15T21:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/export/data",
+        "latency_ms": 4500
+      }
+    },
+    {
+      "message": "AuthenticationError: Unauthorized access attempt",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 78, in check_auth\n    raise AuthenticationError(\"Unauthorized\")\nAuthenticationError: Unauthorized access attempt",
+      "timestamp": "2024-01-16T08:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/data/access",
+        "user_id": "user_606"
+      }
+    },
+    {
+      "message": "ForbiddenError: Admin access required",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/admin.py\", line 67, in require_admin\n    raise ForbiddenError(\"Admin required\")\nForbiddenError: Admin access required",
+      "timestamp": "2024-01-16T08:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/admin/logs",
+        "user_id": "user_707"
+      }
+    },
+    {
+      "message": "OTPExpiredError: Verification code expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 91, in verify_otp\n    raise OTPExpiredError(\"Expired\")\nOTPExpiredError: Verification code expired",
+      "timestamp": "2024-01-16T09:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_808"
+      }
+    },
+    {
+      "message": "DownloadRateLimitError: Download limit exceeded",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 138, in download_file\n    raise DownloadRateLimitError(\"Limit exceeded\")\nDownloadRateLimitError: Download limit exceeded",
+      "timestamp": "2024-01-16T09:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "429",
+        "endpoint": "/api/download/file/33333",
+        "user_id": "user_909",
+        "download_count": 120
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL query timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 245, in execute_query\n    raise DatabaseTimeoutError(\"Timeout\")\nDatabaseTimeoutError: MySQL query timeout",
+      "timestamp": "2024-01-16T10:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/search/complex",
+        "query_time": 31.2,
+        "database": "mysql"
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Latency 3600ms",
+      "stack_trace": "High latency detected\nEndpoint: /api/transform/data\nLatency: 3600ms",
+      "timestamp": "2024-01-16T10:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/transform/data",
+        "latency_ms": 3600
+      }
+    },
+    {
+      "message": "AuthenticationError: Invalid authentication token",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 134, in validate_token\n    raise AuthenticationError(\"Invalid token\")\nAuthenticationError: Invalid authentication token",
+      "timestamp": "2024-01-16T11:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/users/me",
+        "user_id": "user_010"
+      }
+    },
+    {
+      "message": "ForbiddenError: Insufficient privileges",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/permissions.py\", line 112, in check_privileges\n    raise ForbiddenError(\"Insufficient privileges\")\nForbiddenError: Insufficient privileges",
+      "timestamp": "2024-01-16T11:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/settings/update",
+        "user_id": "user_111"
+      }
+    },
+    {
+      "message": "OTPVerificationError: OTP code incorrect",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 74, in verify_otp\n    raise OTPVerificationError(\"Incorrect code\")\nOTPVerificationError: OTP code incorrect",
+      "timestamp": "2024-01-16T12:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_212"
+      }
+    },
+    {
+      "message": "DownloadAbuseError: Excessive download requests",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 205, in download_file\n    raise DownloadAbuseError(\"Excessive requests\")\nDownloadAbuseError: Excessive download requests",
+      "timestamp": "2024-01-16T12:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/download/file/44444",
+        "user_id": "user_313",
+        "download_count": 250
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL connection pool timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 195, in get_connection\n    raise DatabaseTimeoutError(\"Pool timeout\")\nDatabaseTimeoutError: MySQL connection pool timeout",
+      "timestamp": "2024-01-16T13:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/transactions/process",
+        "database": "mysql",
+        "pool_wait_time": 35
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Request processing 4100ms",
+      "stack_trace": "Slow request detected\nEndpoint: /api/compute/heavy\nProcessing: 4100ms",
+      "timestamp": "2024-01-16T13:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/compute/heavy",
+        "latency_ms": 4100
+      }
+    },
+    {
+      "message": "AuthenticationError: Failed to authenticate user",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 61, in authenticate\n    raise AuthenticationError(\"Auth failed\")\nAuthenticationError: Failed to authenticate user",
+      "timestamp": "2024-01-16T14:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/auth/login",
+        "user_id": "user_414"
+      }
+    },
+    {
+      "message": "ForbiddenError: Access control violation",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/middleware.py\", line 89, in enforce_access\n    raise ForbiddenError(\"Access violation\")\nForbiddenError: Access control violation",
+      "timestamp": "2024-01-16T14:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/files/secure",
+        "user_id": "user_515"
+      }
+    },
+    {
+      "message": "OTPExpiredError: One-time password has expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 93, in verify_otp\n    raise OTPExpiredError(\"Expired\")\nOTPExpiredError: One-time password has expired",
+      "timestamp": "2024-01-16T15:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_616"
+      }
+    },
+    {
+      "message": "DownloadRateLimitError: Rate limit exceeded for downloads",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 140, in download_file\n    raise DownloadRateLimitError(\"Rate limit\")\nDownloadRateLimitError: Rate limit exceeded for downloads",
+      "timestamp": "2024-01-16T15:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "429",
+        "endpoint": "/api/download/file/55555",
+        "user_id": "user_717",
+        "download_count": 110
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL query execution exceeded timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 258, in execute_query\n    raise DatabaseTimeoutError(\"Execution timeout\")\nDatabaseTimeoutError: MySQL query execution exceeded timeout",
+      "timestamp": "2024-01-16T16:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/reports/generate",
+        "query_time": 33.5,
+        "database": "mysql"
+      }
+    },
+    {
+      "message": "SlowRequestWarning: High latency 3900ms",
+      "stack_trace": "Request latency warning\nEndpoint: /api/aggregate/data\nLatency: 3900ms",
+      "timestamp": "2024-01-16T16:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/aggregate/data",
+        "latency_ms": 3900
+      }
+    },
+    {
+      "message": "AuthenticationError: Session token invalid",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 167, in validate_session\n    raise AuthenticationError(\"Invalid session\")\nAuthenticationError: Session token invalid",
+      "timestamp": "2024-01-16T17:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/session/validate",
+        "user_id": "user_818"
+      }
+    },
+    {
+      "message": "ForbiddenError: Operation not permitted",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/permissions.py\", line 125, in check_permission\n    raise ForbiddenError(\"Not permitted\")\nForbiddenError: Operation not permitted",
+      "timestamp": "2024-01-16T17:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/operations/execute",
+        "user_id": "user_919"
+      }
+    },
+    {
+      "message": "OTPVerificationError: Verification failed",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 70, in verify_otp\n    raise OTPVerificationError(\"Verification failed\")\nOTPVerificationError: Verification failed",
+      "timestamp": "2024-01-16T18:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_020"
+      }
+    },
+    {
+      "message": "DownloadAbuseError: Abnormal download behavior",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 192, in download_file\n    raise DownloadAbuseError(\"Abnormal behavior\")\nDownloadAbuseError: Abnormal download behavior",
+      "timestamp": "2024-01-16T18:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/download/file/66666",
+        "user_id": "user_121",
+        "download_count": 190
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL connection establishment timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 178, in connect\n    raise DatabaseTimeoutError(\"Connection timeout\")\nDatabaseTimeoutError: MySQL connection establishment timeout",
+      "timestamp": "2024-01-16T19:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/data/sync",
+        "database": "mysql",
+        "connection_timeout": 28
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Request exceeded latency threshold: 3700ms",
+      "stack_trace": "Latency threshold exceeded\nEndpoint: /api/process/large\nLatency: 3700ms\nThreshold: 3000ms",
+      "timestamp": "2024-01-16T19:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/process/large",
+        "latency_ms": 3700
+      }
+    },
+    {
+      "message": "AuthenticationError: Authorization header missing",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/auth.py\", line 43, in extract_token\n    raise AuthenticationError(\"Header missing\")\nAuthenticationError: Authorization header missing",
+      "timestamp": "2024-01-16T20:00:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "401",
+        "endpoint": "/api/protected/resource",
+        "user_id": null
+      }
+    },
+    {
+      "message": "ForbiddenError: Role-based access denied",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/rbac.py\", line 78, in check_role\n    raise ForbiddenError(\"Role denied\")\nForbiddenError: Role-based access denied",
+      "timestamp": "2024-01-16T20:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "403",
+        "endpoint": "/api/admin/users",
+        "user_id": "user_222"
+      }
+    },
+    {
+      "message": "OTPExpiredError: Time-based OTP expired",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/otp.py\", line 97, in verify_otp\n    raise OTPExpiredError(\"TOTP expired\")\nOTPExpiredError: Time-based OTP expired",
+      "timestamp": "2024-01-16T21:00:00Z",
+      "source": "auth-service",
+      "metadata": {
+        "status": "400",
+        "endpoint": "/api/auth/verify-otp",
+        "user_id": "user_323"
+      }
+    },
+    {
+      "message": "DownloadRateLimitError: Concurrent download limit reached",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/download.py\", line 136, in download_file\n    raise DownloadRateLimitError(\"Concurrent limit\")\nDownloadRateLimitError: Concurrent download limit reached",
+      "timestamp": "2024-01-16T21:30:00Z",
+      "source": "download-service",
+      "metadata": {
+        "status": "429",
+        "endpoint": "/api/download/file/77777",
+        "user_id": "user_424",
+        "download_count": 130
+      }
+    },
+    {
+      "message": "DatabaseTimeoutError: MySQL transaction timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/db.py\", line 278, in commit_transaction\n    raise DatabaseTimeoutError(\"Transaction timeout\")\nDatabaseTimeoutError: MySQL transaction timeout",
+      "timestamp": "2024-01-16T22:00:00Z",
+      "source": "database-service",
+      "metadata": {
+        "status": "500",
+        "endpoint": "/api/orders/batch",
+        "database": "mysql",
+        "transaction_time": 35.8
+      }
+    },
+    {
+      "message": "SlowRequestWarning: Processing time 4400ms",
+      "stack_trace": "Slow processing detected\nEndpoint: /api/transform/batch\nTime: 4400ms",
+      "timestamp": "2024-01-16T22:30:00Z",
+      "source": "api-server",
+      "metadata": {
+        "status": "200",
+        "endpoint": "/api/transform/batch",
+        "latency_ms": 4400
+      }
+    }
+  ]
+}

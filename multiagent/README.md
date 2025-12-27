@@ -34,7 +34,7 @@ from multiagent.app.agents.sequential_agent import run_sequential_agent
 
 async def main():
     result = await run_sequential_agent(
-        question="What is a circuit breaker?",
+    question="What is a circuit breaker?",
         session_id="session_123",
     )
     print(result["answer"])

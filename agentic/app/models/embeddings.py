@@ -22,14 +22,28 @@ EMBEDDINGS = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-
 VECTOR_DB = Chroma(persist_directory=RAGDB_PATH, collection_name="doc", embedding_function=EMBEDDINGS)
 
 def ingest_documents(texts: list[str], metadata=None):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=900,
+        chunk_overlap=180,
+        separators=["\n\n", "\n", ". ", " ", ""],
+        add_start_index=True,
+    )
     docs = []
 
     for i, t in enumerate(texts):
-        chunks = splitter.split_text(t)
-        for c in chunks:
-            meta = metadata[i] if metadata and i < len(metadata) else {}
-            docs.append(Document(page_content=c, metadata=meta))
+        meta_base = metadata[i] if metadata and i < len(metadata) else {}
+        if meta_base is None:
+            meta_base = {}
+        meta_base = dict(meta_base)
+        doc_id = meta_base.get("doc_id") or f"doc_{i}"
+
+        chunks = splitter.create_documents([t], metadatas=[meta_base])
+        for chunk_index, d in enumerate(chunks):
+            d.metadata = dict(d.metadata or {})
+            d.metadata.setdefault("doc_id", doc_id)
+            d.metadata["chunk_index"] = chunk_index
+            d.metadata["chunk_id"] = f"{doc_id}::chunk_{chunk_index}"
+            docs.append(d)
 
     VECTOR_DB.add_documents(docs)
     VECTOR_DB.persist()

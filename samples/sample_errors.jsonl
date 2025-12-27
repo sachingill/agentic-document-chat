@@ -1,0 +1,7 @@
+{"timestamp": "2024-01-15T10:30:00Z", "level": "ERROR", "message": "AuthenticationError: Invalid credentials provided", "service": "auth-service", "user_id": "user_123"}
+{"timestamp": "2024-01-15T10:32:15Z", "level": "ERROR", "message": "ForbiddenError: Insufficient permissions", "service": "api-server", "user_id": "user_456"}
+{"timestamp": "2024-01-15T11:00:00Z", "level": "WARN", "message": "Slow request detected: /api/reports/generate took 3500ms", "service": "api-server", "latency_ms": 3500}
+{"timestamp": "2024-01-15T11:15:30Z", "level": "ERROR", "message": "OTPVerificationError: Invalid OTP code", "service": "auth-service", "user_id": "user_789"}
+{"timestamp": "2024-01-15T12:00:00Z", "level": "ERROR", "message": "DatabaseTimeoutError: MySQL query timeout", "service": "db-service", "query_time": 30.5}
+{"timestamp": "2024-01-15T13:00:00Z", "level": "ERROR", "message": "DownloadRateLimitError: Rate limit exceeded", "service": "download-service", "user_id": "user_999", "download_count": 150}
+

@@ -7,6 +7,8 @@ This module defines the state structure for multi-agent workflows.
 from typing import TypedDict, List, Dict, Optional, Literal, Any
 import time
 
+from app.agents.inference_modes import InferenceMode
+
 
 class MultiAgentState(TypedDict):
     """
@@ -53,7 +55,8 @@ class MultiAgentState(TypedDict):
 def create_initial_state(
     question: str,
     session_id: str,
-    pattern: Literal["sequential", "parallel", "supervisor"] = "sequential"
+    pattern: Literal["sequential", "parallel", "supervisor"] = "sequential",
+    inference_mode: InferenceMode = "balanced",
 ) -> MultiAgentState:
     """
     Create initial state for multi-agent workflow.
@@ -87,7 +90,7 @@ def create_initial_state(
         "worker_results": None,
         "combined_result": None,
         "context": [],
-        "metadata": {"start_time": start_time},
+        "metadata": {"start_time": start_time, "inference_mode": inference_mode},
         "error": None,
         "iteration_count": 0,
         "execution_time": 0.0

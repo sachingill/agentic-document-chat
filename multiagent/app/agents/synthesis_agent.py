@@ -11,6 +11,12 @@ import logging
 import sys
 from pathlib import Path
 
+# Shared inference controls + verifier (from unified app)
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+from app.agents.inference_modes import INFERENCE_CONFIGS, InferenceMode
+from app.agents.inference_utils import verify_supported, IDK_SENTINEL, normalize_mixed_idk
+
 # Import LLM factory for multi-provider support
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from multiagent.app.models.llm_providers import create_synthesis_llm
@@ -44,6 +50,9 @@ def synthesis_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     key_points = state.get("key_points", [])
     relationships = state.get("relationships", [])
     research_context = state.get("research_context", [])
+    metadata = state.get("metadata", {}) or {}
+    mode: InferenceMode = metadata.get("inference_mode", "balanced")  # type: ignore
+    cfg = INFERENCE_CONFIGS.get(mode, INFERENCE_CONFIGS["balanced"])
     
     logger.info(f"✍️ Synthesis Agent: Creating final answer")
     
@@ -60,10 +69,20 @@ def synthesis_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         else:
             analyzed_info = "No information available."
     
+    # Evidence gate (high mode): if we don't have enough evidence, return IDK early.
+    if mode == "high" and (not research_context or len(research_context) < cfg.min_chunks):
+        state["final_answer"] = IDK_SENTINEL
+        state["metadata"] = state.get("metadata", {})
+        state["metadata"]["rag_verifier_ran"] = True
+        state["metadata"]["rag_verifier_supported"] = True
+        state["metadata"]["rag_verifier_reason"] = "idk_due_to_insufficient_evidence"
+        return state
+
     try:
         # Build synthesis prompt
         synthesis_prompt = f"""
-You are a synthesis agent. Create a comprehensive, well-structured answer based on the analyzed information.
+You are a strict RAG synthesis agent. Use ONLY the analyzed information / research context.
+If the evidence is insufficient, reply exactly: "{IDK_SENTINEL}"
 
 Question: {question}
 
@@ -87,7 +106,22 @@ Provide a well-structured answer that fully addresses the question.
 """
         
         response = synthesis_llm.invoke(synthesis_prompt)
-        final_answer = response.strip()
+        final_answer = normalize_mixed_idk(response.strip())
+
+        # Optional verifier step (balanced/high): if the answer isn't supported, downgrade to IDK.
+        context_text = "\n\n---\n\n".join((research_context or [])[:10])
+        verifier_supported: bool | None = None
+        verifier_reason: str | None = None
+        if cfg.verify_answer and final_answer.strip() != IDK_SENTINEL and context_text.strip():
+            try:
+                verdict = verify_supported(question=question, context=context_text[:8000], answer=final_answer)
+                verifier_supported = bool(verdict.get("supported")) if "supported" in verdict else None
+                verifier_reason = str(verdict.get("reason")) if verdict.get("reason") is not None else None
+                if verifier_supported is False:
+                    final_answer = IDK_SENTINEL
+            except Exception as e:
+                verifier_supported = None
+                verifier_reason = f"verifier_error:{type(e).__name__}"
         
         # Step 2: Calculate confidence (simple heuristic)
         confidence = _calculate_confidence(analyzed_info, key_points, research_context)
@@ -105,6 +139,10 @@ Provide a well-structured answer that fully addresses the question.
         state["metadata"] = state.get("metadata", {})
         state["metadata"]["synthesis_confidence"] = confidence
         state["metadata"]["synthesis_answer_length"] = len(final_answer)
+        state["metadata"]["inference_mode"] = mode
+        state["metadata"]["rag_verifier_ran"] = True
+        state["metadata"]["rag_verifier_supported"] = verifier_supported
+        state["metadata"]["rag_verifier_reason"] = verifier_reason
         
         logger.info(f"✅ Synthesis Agent: Generated answer ({len(final_answer)} chars, confidence: {confidence:.2f})")
         

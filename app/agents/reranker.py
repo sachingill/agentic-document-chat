@@ -1,19 +1,24 @@
-from typing import List, Tuple
-from langchain_openai import ChatOpenAI
+from typing import Any, List, Tuple, TypedDict
 from langsmith import traceable
 import logging
+
+from app.models.llm_factory import fast_llm
 
 logger = logging.getLogger(__name__)
 
 # Light reranker — no creativity
-rerank_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+rerank_llm = fast_llm(temperature=0.0)
+
+class RerankDoc(TypedDict, total=False):
+    text: str
+    metadata: dict[str, Any]
 
 
 @traceable(name="rerank", run_type="chain")
-async def rerank(question: str, docs: List[str], top_k: int = 3) -> List[str]:
+async def rerank(question: str, docs: List[Any], top_k: int = 3) -> List[RerankDoc]:
     """
     Re-ranks retrieved chunks based on relevance using an LLM.
-    Returns top_k chunks (best-first).
+    Returns top_k chunks (best-first), preserving metadata when provided.
     
     Uses parallel processing for better performance.
     """
@@ -21,14 +26,25 @@ async def rerank(question: str, docs: List[str], top_k: int = 3) -> List[str]:
         logger.warning("rerank called with empty docs list")
         return []
 
-    logger.info(f"Reranking {len(docs)} documents for question: {question[:50]}...")
-    scored_docs: List[Tuple[str, float]] = []
+    # Normalize inputs to {text, metadata}
+    normalized: list[RerankDoc] = []
+    for d in docs:
+        if isinstance(d, str):
+            normalized.append({"text": d, "metadata": {}})
+        elif isinstance(d, dict) and isinstance(d.get("text"), str):
+            normalized.append({"text": d["text"], "metadata": d.get("metadata") or {}})
+        else:
+            normalized.append({"text": str(d), "metadata": {}})
+
+    logger.info(f"Reranking {len(normalized)} documents for question: {question[:50]}...")
+    scored_docs: List[Tuple[RerankDoc, float]] = []
     
     # Process all documents in parallel for better performance
     import asyncio
     
-    async def score_chunk(chunk: str) -> Tuple[str, float]:
+    async def score_chunk(doc: RerankDoc) -> Tuple[RerankDoc, float]:
         """Score a single chunk asynchronously"""
+        chunk = doc.get("text", "")
         prompt = f"""
 You are a relevance scorer. Evaluate how relevant this document chunk is to the user question.
 Score strictly between 0 and 1.
@@ -53,10 +69,10 @@ Respond with only the numeric score.
             logger.warning(f"Error scoring chunk: {e}, defaulting to 0.0")
             score = 0.0
         
-        return (chunk, score)
+        return (doc, score)
     
     # Score all chunks in parallel
-    results = await asyncio.gather(*[score_chunk(chunk) for chunk in docs])
+    results = await asyncio.gather(*[score_chunk(doc) for doc in normalized])
     scored_docs = list(results)
 
     # Sort by score (descending)
@@ -64,8 +80,8 @@ Respond with only the numeric score.
 
     logger.info(f"Reranking complete. Top scores: {[f'{s:.2f}' for _, s in scored_docs[:top_k]]}")
 
-    # Return top_k chunks (without scores)
+    # Return top_k docs (without scores)
     # If we have fewer docs than top_k, return all
-    result = [doc for doc, score in scored_docs[:top_k]]
+    result = [doc for doc, _score in scored_docs[:top_k]]
     logger.info(f"Returning {len(result)} documents after reranking")
     return result

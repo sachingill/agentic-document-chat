@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.agents.help_guide import is_help_query, help_answer
 
-from app.agents.doc_agent import run_document_agent
+from app.agents.doc_agent import run_document_agent_with_citations
 from app.agents.guardrails import check_input_safety, check_output_safety
 from app.agents.inference_modes import InferenceMode
 from app.models.embeddings import ingest_documents
@@ -115,6 +115,18 @@ async def agent_chat(payload: dict):
             Memory.clear_session(session_id)
 
         # ------------------------------------------
+        # 💡 Help / onboarding intent (non-RAG)
+        # ------------------------------------------
+        # Important: check this BEFORE guardrails/LLMs so "help" works even if the guard model is unavailable.
+        if is_help_query(question):
+            return {
+                "answer": help_answer(workflow="structured"),
+                "citations": [],
+                "guardrail": {"stage": "none", "blocked": False, "reason": None},
+                "metadata": {"inference_mode": inference_mode, "help": True},
+            }
+
+        # ------------------------------------------
         # 🔒 1) INPUT GUARDRAIL
         # ------------------------------------------
         gr_in = check_input_safety(question)
@@ -130,15 +142,11 @@ async def agent_chat(payload: dict):
             }
 
         # ------------------------------------------
-        # 💡 Help / onboarding intent (non-RAG)
+        # 🤖 2) RUN DOCUMENT RAG AGENT
         # ------------------------------------------
-        if is_help_query(question):
-            raw_answer = help_answer(workflow="structured")
-        else:
-            # ------------------------------------------
-            # 🤖 2) RUN DOCUMENT RAG AGENT
-            # ------------------------------------------
-            raw_answer = await run_document_agent(session_id, question, inference_mode=inference_mode)  # type: ignore[arg-type]
+        result = await run_document_agent_with_citations(session_id, question, inference_mode=inference_mode)  # type: ignore[arg-type]
+        raw_answer = result.get("answer", "")
+        citations = result.get("citations", [])
 
         # ------------------------------------------
         # 🔒 3) OUTPUT GUARDRAIL
@@ -155,6 +163,7 @@ async def agent_chat(payload: dict):
         # ------------------------------------------
         return {
             "answer": safe_answer,
+            "citations": citations,
             "guardrail": {
                 "stage": "output" if not gr_out.allowed else "none",
                 "blocked": not gr_out.allowed,

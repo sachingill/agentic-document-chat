@@ -180,5 +180,3 @@ llm = create_synthesis_llm(provider="llama", model="llama3:70b")
 
 **Llama support is now fully integrated!** 🚀
 
-
-

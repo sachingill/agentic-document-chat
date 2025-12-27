@@ -1,0 +1,39 @@
+{
+  "default": {
+    "rca_chat": true,
+    "rca_ingest": true,
+    "structured_rag": true,
+    "agentic_rag": true,
+    "multiagent_rag": true,
+    "knowledge_base": true,
+    "feedback": true
+  },
+  "tenant_premium": {
+    "rca_chat": true,
+    "rca_ingest": true,
+    "structured_rag": true,
+    "agentic_rag": true,
+    "multiagent_rag": true,
+    "knowledge_base": true,
+    "feedback": true
+  },
+  "tenant_basic": {
+    "rca_chat": false,
+    "rca_ingest": false,
+    "structured_rag": true,
+    "agentic_rag": false,
+    "multiagent_rag": false,
+    "knowledge_base": true,
+    "feedback": true
+  },
+  "tenant_trial": {
+    "rca_chat": true,
+    "rca_ingest": false,
+    "structured_rag": true,
+    "agentic_rag": false,
+    "multiagent_rag": false,
+    "knowledge_base": true,
+    "feedback": false
+  }
+}
+

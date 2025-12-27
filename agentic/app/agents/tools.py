@@ -12,10 +12,11 @@ sys.path.insert(0, str(parent_dir))
 
 # Import from main app (shared vector DB)
 from app.models.embeddings import get_retriever
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+from app.models.llm_factory import summary_llm
+
+llm = summary_llm(temperature=0.1)
 
 @traceable(name="retrieve_tool", run_type="retriever")
 def retrieve_tool(query: str, k: int = 10):

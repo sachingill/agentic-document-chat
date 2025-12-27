@@ -1,80 +1,45 @@
 """
-AGENTIC RAG API - Main Application
+DEPRECATED: Agentic standalone server
 
-This is the agentic version with:
-- LLM-based tool selection
-- Conditional routing
-- Iterative refinement
+We now run a single unified API (structured + multiagent + agentic) from `/app/main.py`.
+
+This file remains as a thin compatibility shim so existing commands like:
+
+  cd agentic && uvicorn app.main:app --port 8001
+
+continue to work, but they will serve the unified API application.
 """
 
-from dotenv import load_dotenv
-import os
-import sys
+from __future__ import annotations
+
+import importlib.util
+import warnings
 from pathlib import Path
 
-# Load environment variables from .env file (only for local development)
-# In production, environment variables should be set on the hosting platform
-parent_dir = Path(__file__).parent.parent.parent
-env_path = parent_dir / ".env"
-if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
 
-# Add agentic directory to path (two levels up from main.py)
-# main.py is at: agentic/app/main.py
-# Need: agentic/ (so that "from app.xxx" imports work)
-agentic_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(agentic_dir))
-
-# Import LangSmith config early
-from app.config import LangSmithConfig
-
-# Validate OpenAI API key
-if not os.getenv('OPENAI_API_KEY'):
-    raise ValueError(
-        "OPENAI_API_KEY not found in environment. "
-        "Please set it as an environment variable on your hosting platform."
-    )
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import logging
-
-# Import router
-from app.routers.agentic_agent import router as agentic_router
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+warnings.warn(
+    "agentic/app/main.py is deprecated. Use the unified server at app/main.py instead.",
+    DeprecationWarning,
 )
 
-app = FastAPI(
-    title="Agentic RAG API",
-    version="0.2.0",
-    description="Fully agentic RAG system with dynamic tool selection and conditional routing",
-)
 
-# Add CORS middleware for production deployment
-# Allows Streamlit UI (hosted separately) to access this API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific domains
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _load_unified_app():
+    # agentic/app/main.py -> repo_root/app/main.py
+    repo_root = Path(__file__).resolve().parents[2]
+    unified_main_path = repo_root / "app" / "main.py"
+    if not unified_main_path.exists():
+        raise RuntimeError(f"Unified app not found at: {unified_main_path}")
 
-# Register agentic router
-app.include_router(agentic_router)
+    spec = importlib.util.spec_from_file_location("unified_app_main", unified_main_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Failed to create import spec for unified app")
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Agentic RAG API is running",
-        "version": "agentic",
-        "endpoints": {
-            "chat": "/agentic/chat",
-            "ingest": "/agentic/ingest/json"
-        }
-    }
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_unified = _load_unified_app()
+app = _unified.app
+
 

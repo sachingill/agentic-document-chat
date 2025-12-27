@@ -1,0 +1,23 @@
+[
+  {
+    "query": "What is authentication?",
+    "expected_entities": ["authentication", "credentials", "verification"]
+  },
+  {
+    "query": "How does error handling work?",
+    "expected_entities": ["error", "exception", "handling"]
+  },
+  {
+    "query": "What are the main features of the system?",
+    "expected_entities": []
+  },
+  {
+    "query": "Explain the database connection process",
+    "expected_entities": ["database", "connection"]
+  },
+  {
+    "query": "What security measures are implemented?",
+    "expected_entities": ["security", "measures"]
+  }
+]
+

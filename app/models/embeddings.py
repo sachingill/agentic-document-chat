@@ -4,11 +4,20 @@ import os
 import time
 import logging
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
+
+# Try to use newer packages, fallback to deprecated ones for compatibility
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_chroma import Chroma
+except ImportError:
+    # Fallback to deprecated packages if new ones aren't available
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain")
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_community.vectorstores import Chroma
 
 EMBEDDINGS = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
@@ -32,23 +41,34 @@ def _init_vector_db(*, base_dir: str | None = None, force_fresh: bool = False) -
         # Trigger underlying storage initialization early so corruption is detected on startup.
         _ = db._collection.count()
         return db
-    except Exception as e:
+    except (TypeError, Exception) as e:
         # Known symptom: TypeError: object of type 'int' has no len() from chromadb sqlite metadata
-        fallback_dir = _fresh_dir(base_dir)
-        logger.error(
-            "Failed to initialize Chroma at %s (%s). Falling back to fresh DB at %s.",
-            chosen_dir,
-            type(e).__name__,
-            fallback_dir,
-            exc_info=True,
+        # This happens when ChromaDB metadata is corrupted or incompatible
+        error_msg = str(e)
+        is_corruption_error = (
+            "has no len()" in error_msg or
+            isinstance(e, TypeError) or
+            "seq_id" in error_msg.lower()
         )
-        db = Chroma(persist_directory=fallback_dir, collection_name="doc", embedding_function=EMBEDDINGS)
-        try:
-            _ = db._collection.count()
-        except Exception:
-            logger.error("Fallback Chroma DB at %s also failed to initialize.", fallback_dir, exc_info=True)
+        
+        if is_corruption_error:
+            fallback_dir = _fresh_dir(base_dir)
+            logger.warning(
+                "ChromaDB at %s appears corrupted (%s). Falling back to fresh DB at %s.",
+                chosen_dir,
+                type(e).__name__,
+                fallback_dir,
+            )
+            db = Chroma(persist_directory=fallback_dir, collection_name="doc", embedding_function=EMBEDDINGS)
+            try:
+                _ = db._collection.count()
+            except Exception as fallback_error:
+                logger.error("Fallback Chroma DB at %s also failed to initialize: %s", fallback_dir, fallback_error, exc_info=True)
+                raise
+            return db
+        else:
+            # Re-raise if it's not a corruption error
             raise
-        return db
 
 
 VECTOR_DB = _init_vector_db()

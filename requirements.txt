@@ -19,6 +19,8 @@ langchain-community
 langchain-core
 langchain-text-splitters
 langchain-openai
+langchain-huggingface
+langchain-chroma
 langgraph
 chromadb
 sentence-transformers

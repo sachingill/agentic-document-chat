@@ -1,0 +1,37 @@
+[
+  {
+    "query": "What is the authentication flow?",
+    "retrieved_chunks": [
+      "The authentication flow consists of three main steps: user submits credentials, server validates them, and issues a token.",
+      "OAuth2 is one of the most common authentication protocols used in modern applications."
+    ],
+    "answer": "The authentication flow involves three steps: submitting credentials, validation, and token issuance.",
+    "expected_entities": ["authentication", "credentials", "token", "three steps"],
+    "document_text": "The authentication flow consists of three main steps: user submits credentials, server validates them, and issues a token. OAuth2 is one of the most common authentication protocols used in modern applications.",
+    "citations": [
+      {
+        "chunk_id": "doc_0::chunk_0",
+        "start_index": 0,
+        "doc_id": "doc_0"
+      }
+    ]
+  },
+  {
+    "query": "How does error handling work?",
+    "retrieved_chunks": [
+      "Error handling involves catching exceptions and providing meaningful error messages to users.",
+      "The system logs all errors to a centralized logging service for debugging purposes."
+    ],
+    "answer": "Error handling catches exceptions and provides meaningful messages, with all errors logged centrally.",
+    "expected_entities": ["error handling", "exceptions", "logging"],
+    "document_text": "Error handling involves catching exceptions and providing meaningful error messages to users. The system logs all errors to a centralized logging service for debugging purposes.",
+    "citations": [
+      {
+        "chunk_id": "doc_1::chunk_0",
+        "start_index": 0,
+        "doc_id": "doc_1"
+      }
+    ]
+  }
+]
+

@@ -30,7 +30,9 @@ class LLMConfig:
     DEFAULT_PROVIDER: ProviderType = os.getenv("LLM_PROVIDER", "auto").lower()  # type: ignore
     
     # API Keys
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # - Real OpenAI: OPENAI_API_KEY or LLM_OPENAI_API_KEY
+    # - Local OpenAI-compatible servers (Ollama/vLLM): use LLM_BASE_URL + LLM_API_KEY (handled in OpenAIProvider)
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_OPENAI_API_KEY")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     
@@ -41,9 +43,10 @@ class LLMConfig:
     DEFAULT_MODELS = {
         "openai": {
             "fast": os.getenv("LLM_FAST_MODEL", "gpt-4o-mini"),
-            "reasoning": os.getenv("LLM_REASONING_MODEL", "gpt-4o"),
-            "synthesis": os.getenv("LLM_SYNTHESIS_MODEL", "gpt-4o"),
-            "default": os.getenv("LLM_DEFAULT_MODEL", "gpt-4o"),
+            # For local OpenAI-compatible backends (Ollama/vLLM), prefer LLM_MAIN_MODEL if set.
+            "reasoning": os.getenv("LLM_REASONING_MODEL") or os.getenv("LLM_MAIN_MODEL") or "gpt-4o",
+            "synthesis": os.getenv("LLM_SYNTHESIS_MODEL") or os.getenv("LLM_MAIN_MODEL") or "gpt-4o",
+            "default": os.getenv("LLM_DEFAULT_MODEL") or os.getenv("LLM_MAIN_MODEL") or "gpt-4o",
         },
         "claude": {
             "fast": os.getenv("LLM_FAST_MODEL", "claude-3-haiku-20240307"),
@@ -69,7 +72,10 @@ class LLMConfig:
     def get_available_providers(cls) -> list[str]:
         """Get list of providers with available API keys or services."""
         available = []
-        if cls.OPENAI_API_KEY:
+        # "openai" provider is considered available if:
+        # - real OpenAI key exists, OR
+        # - a local OpenAI-compatible base_url is configured (Ollama/vLLM)
+        if cls.OPENAI_API_KEY or os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"):
             available.append("openai")
         if cls.ANTHROPIC_API_KEY:
             available.append("claude")

@@ -1,14 +1,16 @@
 # app/agents/doc_agent.py
 
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Any
 from langgraph.graph import StateGraph, END
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
 import json
 
 from app.models.memory import Memory
 from app.agents.tools import retrieve_tool
 from app.agents.reranker import rerank
+from app.agents.inference_modes import InferenceMode, INFERENCE_CONFIGS
+from app.agents.inference_utils import expand_queries, verify_supported, IDK_SENTINEL, normalize_mixed_idk
+from app.models.llm_factory import main_llm
 import logging
 logger = logging.getLogger(__name__)
 
@@ -16,13 +18,15 @@ logger = logging.getLogger(__name__)
 class AgentState(TypedDict):
     session_id: str
     question: str
-    context: List[str]
+    inference_mode: InferenceMode
+    context: List[dict[str, Any]]  # selected chunks with metadata
     answer: str
     subqueries: List[str]  # Decomposed sub-queries
-    merged_context: List[str]  # Merged context from all sub-queries
+    merged_context: List[dict[str, Any]]  # Merged context from all sub-queries
+    citations: List[dict[str, Any]]  # final citations returned to API
 
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+llm = main_llm(temperature=0.1)
 
 
 @traceable(name="retrieve_node", run_type="tool")
@@ -31,11 +35,15 @@ async def retrieve_node(state: AgentState) -> AgentState:
     try:
         #--------- Vector search ---------
         res = retrieve_tool(question)
-        docs = res["results"] if isinstance(res, dict) and "results" in res else []
+        docs = res.get("documents") if isinstance(res, dict) else None
+        if not isinstance(docs, list):
+            # Back-compat fallback
+            texts = res["results"] if isinstance(res, dict) and "results" in res else []
+            docs = [{"text": t, "metadata": {}} for t in texts]
         
         logger.info(f"Retrieved {len(docs)} documents from vector search")
         if docs:
-            logger.debug(f"First retrieved doc: {docs[0][:100]}...")
+            logger.debug(f"First retrieved doc: {str(docs[0].get('text',''))[:100]}...")
 
         #--------- Rerank ---------
         if docs:
@@ -43,7 +51,7 @@ async def retrieve_node(state: AgentState) -> AgentState:
             state["context"] = ranked
             logger.info(f"After reranking: {len(ranked)} documents selected")
             if ranked:
-                logger.debug(f"Top reranked doc: {ranked[0][:100]}...")
+                logger.debug(f"Top reranked doc: {str(ranked[0].get('text',''))[:100]}...")
         else:
             logger.warning("No documents retrieved from vector search - empty context")
             state["context"] = []
@@ -58,8 +66,11 @@ async def retrieve_node(state: AgentState) -> AgentState:
 @traceable(name="generate_node", run_type="llm")
 def generate_node(state: AgentState) -> AgentState:
     question = state["question"]
-    context = "\n\n".join(state.get("context", []))
+    chunks = state.get("context", [])
+    context = "\n\n".join([str(c.get("text", "")) for c in chunks])
     session = state["session_id"]
+    mode: InferenceMode = state.get("inference_mode", "balanced")  # type: ignore
+    cfg = INFERENCE_CONFIGS.get(mode, INFERENCE_CONFIGS["balanced"])
 
     history = Memory.get_context(session)
     
@@ -67,6 +78,13 @@ def generate_node(state: AgentState) -> AgentState:
     logger.info(f"Generating answer with {len(state.get('context', []))} context chunks")
     if not context or context.strip() == "":
         logger.warning("Empty context - LLM will respond 'I don't know'")
+
+    # Evidence gate (high-strictness): if evidence is too thin, don't even attempt synthesis.
+    if mode == "high" and len(state.get("context", [])) < cfg.min_chunks:
+        response = IDK_SENTINEL
+        Memory.add_turn(session, question, response)
+        state["answer"] = response
+        return state
 
     prompt = f"""
 You are a strict RAG assistant. 
@@ -87,9 +105,26 @@ RULES:
 """
 
     response = llm.invoke(prompt).content
+    response = normalize_mixed_idk(response)
+
+    # Optional verifier step (balanced/high): if the answer isn't supported, downgrade to IDK.
+    if cfg.verify_answer and response.strip() != IDK_SENTINEL and context.strip():
+        verdict = verify_supported(question=question, context=context[:8000], answer=response)
+        if verdict.get("supported") is False:
+            logger.info(f"Verifier rejected answer; returning IDK. reason={verdict.get('reason')}")
+            response = IDK_SENTINEL
+
     Memory.add_turn(session, question, response)
 
     state["answer"] = response
+    # Attach citations (top chunks used)
+    state["citations"] = [
+        {
+            "text": c.get("text", "")[:500],
+            "metadata": c.get("metadata") or {},
+        }
+        for c in chunks
+    ]
     return state
 
 @traceable(name="decompose_node", run_type="chain")
@@ -155,26 +190,74 @@ def multi_query_retrieve_node(state: AgentState) -> AgentState:
     if not subqueries:
         logger.warning("No subqueries found, using original question")
         subqueries = [original_question]
+
+    # Normalize subqueries in case the LLM returns a list of dicts like:
+    # [{"subquery": "..."}, {"query": "..."}]
+    normalized: list[str] = []
+    for sq in subqueries:
+        if isinstance(sq, str):
+            s = sq.strip()
+            if s:
+                normalized.append(s)
+            continue
+        if isinstance(sq, dict):
+            val = sq.get("subquery") or sq.get("query") or sq.get("q")
+            if isinstance(val, str) and val.strip():
+                normalized.append(val.strip())
+            continue
+        # Fallback: stringify
+        s = str(sq).strip()
+        if s:
+            normalized.append(s)
+
+    if not normalized:
+        normalized = [original_question]
+    subqueries = normalized
     
-    all_docs = []
-    seen_docs = set()  # For deduplication
+    all_docs: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()  # For deduplication
+    mode: InferenceMode = state.get("inference_mode", "balanced")  # type: ignore
+    cfg = INFERENCE_CONFIGS.get(mode, INFERENCE_CONFIGS["balanced"])
     
     try:
         # Retrieve for each sub-query
         for i, subquery in enumerate(subqueries):
             logger.info(f"Retrieving for sub-query {i+1}/{len(subqueries)}: {subquery}")
-            res = retrieve_tool(subquery, k=5)  # Get 5 docs per sub-query
-            docs = res["results"] if isinstance(res, dict) and "results" in res else []
+            res = retrieve_tool(subquery, k=max(5, cfg.base_k // max(1, len(subqueries))))  # distribute budget
+            docs = res.get("documents") if isinstance(res, dict) else None
+            if not isinstance(docs, list):
+                texts = res["results"] if isinstance(res, dict) and "results" in res else []
+                docs = [{"text": t, "metadata": {}} for t in texts]
             
             # Deduplicate: add only if not seen before
             for doc in docs:
-                # Use first 100 chars as a simple deduplication key
-                doc_key = doc[:100] if len(doc) > 100 else doc
-                if doc_key not in seen_docs:
-                    seen_docs.add(doc_key)
+                meta = doc.get("metadata") or {}
+                key = meta.get("chunk_id") or meta.get("chunk_id".upper())  # defensive
+                if not isinstance(key, str) or not key:
+                    text = str(doc.get("text", ""))
+                    key = text[:120]
+                if key not in seen_keys:
+                    seen_keys.add(key)
                     all_docs.append(doc)
             
             logger.info(f"Retrieved {len(docs)} docs for sub-query {i+1}, total unique: {len(all_docs)}")
+
+        # Second-pass retrieval if evidence is thin (common cause of "I don't know")
+        if len(all_docs) < cfg.min_chunks:
+            logger.info(f"Second-pass retrieval triggered (mode={mode}, have={len(all_docs)}, need={cfg.min_chunks})")
+            for q in expand_queries(original_question, mode=mode)[1:]:
+                res2 = retrieve_tool(q, k=cfg.second_pass_k)
+                docs2 = res2.get("documents") if isinstance(res2, dict) else None
+                if not isinstance(docs2, list):
+                    texts2 = res2["results"] if isinstance(res2, dict) and "results" in res2 else []
+                    docs2 = [{"text": t, "metadata": {}} for t in texts2]
+                for doc in docs2:
+                    meta = doc.get("metadata") or {}
+                    key = meta.get("chunk_id") or str(doc.get("text", ""))[:120]
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        all_docs.append(doc)
+            logger.info(f"Second-pass retrieval complete: total unique={len(all_docs)}")
         
         state["merged_context"] = all_docs
         logger.info(f"Multi-query retrieval complete: {len(all_docs)} unique documents")
@@ -246,8 +329,12 @@ def build_graph():
 AGENT = build_graph()
 
 
-@traceable(name="run_document_agent", run_type="chain")
-async def run_document_agent(session_id: str, question: str):
+@traceable(name="run_document_agent_with_citations", run_type="chain")
+async def run_document_agent_with_citations(
+    session_id: str,
+    question: str,
+    inference_mode: InferenceMode = "balanced",
+) -> dict[str, Any]:
     """
     Run the document agent asynchronously.
     Must be async because retrieve_node uses async reranking.
@@ -261,12 +348,25 @@ async def run_document_agent(session_id: str, question: str):
     initial = {
         "session_id": session_id,
         "question": question,
+        "inference_mode": inference_mode,
         "context": [],
         "answer": "",
         "subqueries": [],
-        "merged_context": []
+        "merged_context": [],
+        "citations": [],
     }
     # Use ainvoke for async graph execution (required when nodes are async)
     # LangGraph automatically traces the graph execution when LangSmith is enabled
-    result = await AGENT.ainvoke(initial, config={"metadata": {"session_id": session_id}})
-    return result["answer"]
+    # Include session_id + question in LangSmith metadata so we can attach user feedback later.
+    result = await AGENT.ainvoke(
+        initial,
+        config={"metadata": {"session_id": session_id, "question": question, "inference_mode": inference_mode}},
+    )
+    return {"answer": result.get("answer", ""), "citations": result.get("citations", [])}
+
+
+# Backwards-compatible API: return answer string only.
+@traceable(name="run_document_agent", run_type="chain")
+async def run_document_agent(session_id: str, question: str, inference_mode: InferenceMode = "balanced") -> str:
+    result = await run_document_agent_with_citations(session_id, question, inference_mode=inference_mode)
+    return str(result.get("answer", ""))

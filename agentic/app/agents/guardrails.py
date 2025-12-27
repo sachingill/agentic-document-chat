@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from langchain_openai import ChatOpenAI
 from langsmith import traceable
 
-_guard_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+from app.models.llm_factory import guard_llm
+
+_guard_llm = guard_llm(temperature=0.0)
 
 
 @dataclass

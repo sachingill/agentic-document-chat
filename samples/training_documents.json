@@ -1,0 +1,129 @@
+[
+  {
+    "doc_id": "doc_auth_001",
+    "title": "Authentication System Overview",
+    "content": "The authentication system supports three main methods: OAuth2, JWT tokens, and API keys. OAuth2 is the recommended method for user authentication as it provides secure token-based access. JWT tokens are stateless and ideal for microservices. API keys are simpler but less secure, suitable for server-to-server communication. The authentication flow consists of four steps: 1) User submits credentials, 2) Server validates credentials against database, 3) Server generates authentication token, 4) Token is returned to client for subsequent requests. Session management is handled automatically with token expiration set to 24 hours by default.",
+    "category": "authentication",
+    "tags": ["auth", "security", "oauth2", "jwt", "api-keys"]
+  },
+  {
+    "doc_id": "doc_auth_002",
+    "title": "OAuth2 Implementation Details",
+    "content": "OAuth2 implementation follows the authorization code flow. The process begins when a user is redirected to the authorization server. The authorization server validates the user's credentials and issues an authorization code. This code is then exchanged for an access token and refresh token. Access tokens are short-lived (1 hour) while refresh tokens last 30 days. The system supports scopes for fine-grained access control: read, write, admin. Token revocation is supported through the /auth/revoke endpoint. Security best practices include: HTTPS only, token encryption, and regular token rotation.",
+    "category": "authentication",
+    "tags": ["oauth2", "tokens", "security", "authorization"]
+  },
+  {
+    "doc_id": "doc_error_001",
+    "title": "Error Handling Architecture",
+    "content": "The error handling system uses a centralized logging service that captures all application errors. Errors are categorized into four levels: INFO, WARN, ERROR, and FATAL. ERROR level indicates application failures that require attention. FATAL errors cause application shutdown. The system automatically logs errors with the following metadata: timestamp, error message, stack trace, user ID, endpoint, and request ID. Error notifications are sent to the operations team for ERROR and FATAL levels. The system supports error correlation to identify patterns and root causes. Common error patterns include: database timeouts, authentication failures, and rate limit exceeded.",
+    "category": "error-handling",
+    "tags": ["errors", "logging", "monitoring", "exceptions"]
+  },
+  {
+    "doc_id": "doc_error_002",
+    "title": "Database Timeout Resolution",
+    "content": "Database timeouts occur when queries exceed the configured timeout threshold of 30 seconds. Common causes include: slow queries, connection pool exhaustion, database server overload, and network latency. Resolution steps: 1) Check query execution time in database logs, 2) Review connection pool settings, 3) Optimize slow queries by adding indexes, 4) Scale database resources if needed. Prevention measures include: query optimization, connection pooling, read replicas for read-heavy workloads, and query timeout configuration. The system automatically retries failed queries up to 3 times with exponential backoff.",
+    "category": "error-handling",
+    "tags": ["database", "timeout", "performance", "troubleshooting"]
+  },
+  {
+    "doc_id": "doc_db_001",
+    "title": "Database Connection Management",
+    "content": "The database connection pool is configured with a maximum of 50 connections. Connection pooling reduces overhead by reusing connections. The pool maintains connections in three states: active, idle, and closed. Idle connections are kept for 5 minutes before being closed. Connection health checks run every 30 seconds. The system uses MySQL 8.0 with InnoDB storage engine. Read replicas are configured for load distribution. Write operations go to the primary database while read operations can use replicas. Transaction isolation level is set to READ COMMITTED for better concurrency.",
+    "category": "database",
+    "tags": ["database", "mysql", "connection-pool", "performance"]
+  },
+  {
+    "doc_id": "doc_api_001",
+    "title": "API Rate Limiting",
+    "content": "API rate limiting prevents abuse and ensures fair resource usage. The system implements token bucket algorithm with the following limits: 100 requests per minute for authenticated users, 20 requests per minute for unauthenticated users, and 1000 requests per hour for API keys. Rate limit headers are included in all responses: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset. When limits are exceeded, the API returns HTTP 429 Too Many Requests. Rate limits are enforced per API key or user ID. The system supports custom rate limits for enterprise customers through configuration.",
+    "category": "api",
+    "tags": ["api", "rate-limiting", "security", "throttling"]
+  },
+  {
+    "doc_id": "doc_security_001",
+    "title": "Security Best Practices",
+    "content": "Security measures include: input validation, output sanitization, HTTPS enforcement, and regular security audits. All user inputs are validated and sanitized before processing. SQL injection prevention uses parameterized queries. XSS protection is implemented through output encoding. CSRF tokens are required for state-changing operations. Password requirements: minimum 12 characters, must include uppercase, lowercase, numbers, and special characters. Passwords are hashed using bcrypt with cost factor 12. Two-factor authentication (2FA) is supported via TOTP. Security headers include: X-Content-Type-Options, X-Frame-Options, Content-Security-Policy.",
+    "category": "security",
+    "tags": ["security", "authentication", "encryption", "best-practices"]
+  },
+  {
+    "doc_id": "doc_perf_001",
+    "title": "Performance Optimization",
+    "content": "Performance optimization strategies include: caching, database indexing, query optimization, and CDN usage. Redis cache is used for frequently accessed data with TTL of 5 minutes. Database indexes are created on frequently queried columns: user_id, email, created_at. Slow query log identifies queries taking longer than 1 second. Query optimization techniques: avoid SELECT *, use LIMIT clauses, optimize JOIN operations. CDN is configured for static assets with cache headers set to 1 year. API response times are monitored with P95 target of 200ms. Database connection pooling reduces connection overhead.",
+    "category": "performance",
+    "tags": ["performance", "caching", "optimization", "monitoring"]
+  },
+  {
+    "doc_id": "doc_monitoring_001",
+    "title": "Monitoring and Observability",
+    "content": "The monitoring system collects metrics, logs, and traces. Key metrics include: request rate, error rate, response time, and database query time. Metrics are collected every 10 seconds and stored for 90 days. Log aggregation uses centralized logging service. Log levels: DEBUG, INFO, WARN, ERROR, FATAL. Distributed tracing tracks requests across services using trace IDs. Alerts are configured for: error rate > 1%, response time P95 > 500ms, database connection pool > 80% utilization. Dashboards display real-time metrics and historical trends. The system integrates with external monitoring tools via APIs.",
+    "category": "monitoring",
+    "tags": ["monitoring", "metrics", "logging", "observability"]
+  },
+  {
+    "doc_id": "doc_deploy_001",
+    "title": "Deployment Process",
+    "content": "Deployment follows CI/CD pipeline with automated testing. Process: 1) Code commit triggers build, 2) Automated tests run (unit, integration, e2e), 3) Build Docker image, 4) Deploy to staging environment, 5) Run smoke tests, 6) Deploy to production with blue-green deployment. Rollback is automated if health checks fail. Database migrations run automatically with version control. Environment variables are managed through configuration service. Secrets are stored in secure vault. Deployment notifications are sent to team via Slack. Zero-downtime deployments are achieved through load balancer configuration.",
+    "category": "deployment",
+    "tags": ["deployment", "cicd", "docker", "automation"]
+  },
+  {
+    "doc_id": "doc_rca_001",
+    "title": "Root Cause Analysis Process",
+    "content": "RCA process follows five steps: 1) Identify the problem and gather error logs, 2) Analyze error patterns and correlations, 3) Investigate potential root causes, 4) Verify root cause through testing, 5) Implement fix and monitor. Error logs are analyzed for: error frequency, error types, affected users, time patterns, and correlation with deployments. Common root causes include: code bugs, configuration errors, infrastructure issues, and external dependencies. RCA reports include: problem description, timeline, root cause analysis, impact assessment, and resolution steps. The system maintains a knowledge base of known issues and their resolutions.",
+    "category": "rca",
+    "tags": ["rca", "troubleshooting", "errors", "analysis"]
+  },
+  {
+    "doc_id": "doc_rca_002",
+    "title": "Common Error Patterns",
+    "content": "Common error patterns identified in production: AuthenticationError (401/403) - caused by invalid credentials or expired tokens, DatabaseTimeoutError - caused by slow queries or connection pool exhaustion, RateLimitError (429) - caused by exceeding API rate limits, ValidationError (400) - caused by invalid input data, InternalServerError (500) - caused by unhandled exceptions. Each error pattern has documented resolution steps. Authentication errors are resolved by: checking token validity, verifying credentials, and reviewing access permissions. Database timeouts are resolved by: optimizing queries, scaling database, and adjusting connection pool settings.",
+    "category": "rca",
+    "tags": ["rca", "errors", "patterns", "troubleshooting"]
+  },
+  {
+    "doc_id": "doc_otp_001",
+    "title": "OTP Verification System",
+    "content": "OTP (One-Time Password) system is used for two-factor authentication and password reset. OTP codes are 6-digit numeric codes generated using TOTP algorithm. OTP validity period is 5 minutes. Maximum 3 failed attempts allowed before account lockout for 15 minutes. OTP codes are sent via SMS or email. The system uses secure random number generation for OTP creation. OTP verification endpoint: /api/auth/verify-otp. Common OTP errors: InvalidOTPError - wrong code entered, OTPExpiredError - code expired, OTPRateLimitError - too many attempts. OTP generation rate is limited to 3 requests per 10 minutes per user.",
+    "category": "authentication",
+    "tags": ["otp", "2fa", "authentication", "security"]
+  },
+  {
+    "doc_id": "doc_download_001",
+    "title": "File Download System",
+    "content": "File download system supports secure file access with rate limiting. Download endpoint: /api/download/file/{file_id}. Rate limits: 10 downloads per hour per user, 100 downloads per hour per IP address. Files are stored in S3 with signed URLs for secure access. Download URLs expire after 1 hour. File access requires authentication and authorization checks. Download abuse detection monitors: download frequency, file size patterns, and IP address patterns. Suspicious patterns trigger automatic rate limiting. Large files (>100MB) require special permissions. Download logs include: user ID, file ID, timestamp, IP address, and file size.",
+    "category": "download",
+    "tags": ["download", "files", "security", "rate-limiting"]
+  },
+  {
+    "doc_id": "doc_api_002",
+    "title": "API Endpoint Documentation",
+    "content": "Main API endpoints: /api/auth/login - user authentication, /api/auth/logout - session termination, /api/users/{id} - get user details, /api/users/{id}/update - update user information, /api/data/search - search data with filters, /api/reports/generate - generate reports. All endpoints require authentication except /api/auth/login and /api/health. API versioning uses URL path: /api/v1/, /api/v2/. Response format is JSON with standard structure: {status, data, error, metadata}. Error responses include: error code, error message, and error details. API documentation is available at /api/docs with OpenAPI specification.",
+    "category": "api",
+    "tags": ["api", "endpoints", "documentation", "rest"]
+  },
+  {
+    "doc_id": "doc_cache_001",
+    "title": "Caching Strategy",
+    "content": "Multi-layer caching improves performance: L1 cache (in-memory, 1 minute TTL), L2 cache (Redis, 5 minutes TTL), L3 cache (CDN, 1 year TTL). Cache invalidation strategies: time-based expiration, event-based invalidation, and manual invalidation. Cache keys follow pattern: {service}:{resource}:{id}. Cache hit ratio target is >80%. Frequently cached data: user profiles, API responses, database query results. Cache warming preloads hot data on system startup. Cache monitoring tracks: hit rate, miss rate, eviction rate, and memory usage. Cache failures fall back to database queries.",
+    "category": "performance",
+    "tags": ["caching", "redis", "performance", "optimization"]
+  },
+  {
+ "doc_id": "doc_logging_001",
+    "title": "Logging Standards",
+    "content": "Logging follows structured logging format with JSON output. Log fields include: timestamp, level, message, service, user_id, request_id, and metadata. Log levels: DEBUG (detailed debugging), INFO (general information), WARN (warnings), ERROR (errors), FATAL (critical failures). Log rotation: daily rotation with 30-day retention. Log aggregation uses centralized service. Sensitive data is automatically redacted: passwords, tokens, credit card numbers. Log sampling reduces volume for high-traffic endpoints. Correlation IDs track requests across services. Log analysis tools support: search, filtering, alerting, and visualization.",
+    "category": "logging",
+    "tags": ["logging", "monitoring", "debugging", "observability"]
+  },
+  {
+    "doc_id": "doc_test_001",
+    "title": "Testing Strategy",
+    "content": "Testing pyramid: 70% unit tests, 20% integration tests, 10% end-to-end tests. Unit tests cover individual functions and classes. Integration tests verify component interactions. E2E tests validate complete user workflows. Test coverage target is >80%. Automated tests run on every commit. Test environments: development, staging, production-like. Performance tests measure: response time, throughput, and resource usage. Load tests simulate high traffic. Security tests include: penetration testing, vulnerability scanning, and dependency checks. Test data is managed separately from production data.",
+    "category": "testing",
+    "tags": ["testing", "qa", "automation", "quality"]
+  }
+]
+
